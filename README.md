@@ -27,8 +27,9 @@ For the purpose of having to do less work, some components are copied over from 
 | change inter-project imports to<br>relative imports after the export                 	|    0    	|          	|           	|
 | __`__all__` NAME PARSING__                                                           	|    X    	|     X    	|     X     	|
 | finding all variable, class, and function names<br>that should be added to `__all__` 	|    X    	|     X    	|     X     	|
-| ignore private names (start with "\_") and internal cells                            	|    X    	|     X    	|     X     	|
+| ignore private names (start with one "\_", and not "\_\_")<br>and internal cells     	|    X    	|     X    	|     X     	|
 | find `_all_` variables in code and<br>add content of assignment to `__all__`         	|    X    	|     X    	|     X     	|
+| support for fastai added python functionality (like @patch)                          	|    0    	|          	|           	|
 | __CAN GENERATE WORKING OUTPUT__                                                      	|    X    	|     0    	|     X     	|
 | export from a single file to a single file                                           	|    X    	|     0    	|     X     	|
 | export from a single file to multiple files                                          	|    0    	|          	|           	|
