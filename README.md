@@ -24,13 +24,13 @@ For the purpose of having to do less work, some components are copied over from 
 | `# default_exp`                                                                      	|    0    	|          	|           	|
 | __FORMATTING / CLEANUP__                                                             	|    X    	|     0    	|     X     	|
 | removing special comments in output                                                  	|    X    	|     X    	|     X     	|
-| change inter-project imports to<br>relative imports after the export                 	|    0    	|          	|           	|
+| change inter-project imports to<br>relative imports after the export                 	|    X    	|     0    	|     0     	|
 | __`__all__` NAME PARSING__                                                           	|    X    	|     X    	|     X     	|
 | finding all variable, class, and function names<br>that should be added to `__all__` 	|    X    	|     X    	|     X     	|
 | ignore private names (start with one "\_", and not "\_\_")<br>and internal cells     	|    X    	|     X    	|     X     	|
 | find `_all_` variables in code and<br>add content of assignment to `__all__`         	|    X    	|     X    	|     X     	|
 | support for fastai added python functionality: `@patch`                              	|    X    	|     X    	|     X     	|
-| support for fastai added python functionality: `@typedispatch`                       	|    0    	|          	|           	|
+| support for fastai added python functionality: `@typedispatch`                       	|    X    	|     X    	|     X     	|
 | __CAN GENERATE WORKING OUTPUT__                                                      	|    X    	|     0    	|     X     	|
 | export from a single file to a single file                                           	|    X    	|     0    	|     X     	|
 | export from a single file to multiple files                                          	|    0    	|          	|           	|
