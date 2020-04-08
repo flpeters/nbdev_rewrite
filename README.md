@@ -22,6 +22,7 @@ For the purpose of having to do less work, some components are copied over from 
 | `# export`options parsing (internal and export target)                               	|    X    	|     0    	|     X     	|
 | `# hide`                                                                             	|    X    	|     X    	|     X     	|
 | `# default_exp`                                                                      	|    0    	|          	|           	|
+| `# cls_level`                                                                        	|    0    	|          	|           	|
 | __FORMATTING / CLEANUP__                                                             	|    X    	|     0    	|     X     	|
 | removing special comments in output                                                  	|    X    	|     X    	|     X     	|
 | change inter-project imports to<br>relative imports after the export                 	|    X    	|     0    	|     0     	|
