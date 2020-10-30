@@ -27,3 +27,11 @@ from .test import *
 
 # Cell nr. 190
 3+3;
+
+
+# Cell nr. 190
+3+3;
+
+
+# Cell nr. 194
+'this is inside a scope'

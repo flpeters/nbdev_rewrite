@@ -10,3 +10,7 @@ __all__ = []
 
 # Cell nr. 191; Comes from '00_export_v4.ipynb'
 from . import imports
+
+
+# Cell nr. 194; Comes from '00_export_v4.ipynb'
+'this is inside a scope'
