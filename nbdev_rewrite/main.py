@@ -53,17 +53,12 @@ class StackTrace:
         
     def __init__(self, namespace:object, up:StackTrace=None):
         self.namespace = namespace.__qualname__ if namespace else None
-        self.up = up
-        self.lineno = currentframe().f_back.f_lineno
+        self.up, self.lineno = up, currentframe().f_back.f_lineno
         
     @classmethod
     def ext(cls, file:str, cellno:int=None, lineno:int=None, excerpt:str=None, up:StackTrace=None):
         st = cls(None, up=up)
-        st.extern = True
-        st.file = file
-        st.cellno = cellno
-        st.lineno = lineno
-        st.excerpt = excerpt
+        st.extern, st.file, st.cellno, st.lineno, st.excerpt = True, file, cellno, lineno, excerpt
         return st
         
     def __repr__(self):
@@ -96,7 +91,7 @@ class StackTrace:
             self.report_error(err=err, lineno=lineno, span=span)
 
 
-# Cell nr. 58
+# Cell nr. 55
 # TODO: Only look for 0 indent comments?
 def iter_comments(src:str, pure_comments_only:bool=True, line_limit:int=None) -> (str, (int, int)):
     "Detect all comments in a piece of code, excluding those that are a part of a string."
@@ -130,7 +125,7 @@ def iter_comments(src:str, pure_comments_only:bool=True, line_limit:int=None) ->
             prev_c = c
 
 
-# Internal Cell nr. 62
+# Internal Cell nr. 59
 # https://docs.python.org/3/library/re.html
 re_match_comment = re.compile(r"""
         ^              # start of the string
@@ -141,7 +136,7 @@ re_match_comment = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE) # re.MULTILINE is not passed, since this regex is used on each line separately.
 
 
-# Cell nr. 67
+# Cell nr. 64
 def parse_comment(all_commands:dict, comment:str, st:StackTrace) -> (bool, str, dict, dict):
     "Finds command names and arguments in comments and parses them with parse_arguments()"
     res = re_match_comment.search(comment)
@@ -171,7 +166,7 @@ def parse_comment(all_commands:dict, comment:str, st:StackTrace) -> (bool, str, 
     return True, cmd, result, is_set
 
 
-# Internal Cell nr. 77
+# Internal Cell nr. 74
 class Context:
     def __init__(self, cell_nr=None, export_nr=None):
         self.cell_nr   = cell_nr
@@ -180,7 +175,7 @@ class Context:
         return f'cell_nr: {self.cell_nr}, export_nr: {self.export_nr}'
 
 
-# Internal Cell nr. 78
+# Internal Cell nr. 75
 def lineno(node):
     "Format a string containing location information on ast nodes. Used for Debugging only."
     if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
@@ -188,20 +183,20 @@ def lineno(node):
     else: return ''
 
 
-# Internal Cell nr. 79
+# Internal Cell nr. 76
 def info(context, node):
     "Format a string with available information on a ast node. Used for Debugging only."
     return f'\nLocation: {context} | {lineno(node)}'
 
 
-# Internal Cell nr. 81
+# Internal Cell nr. 78
 def unwrap_attr(node:_ast.Attribute) -> str:
     "Joins a sequance of Attribute accesses together in a single string. e.g. numpy.array"
     if isinstance(node.value, _ast.Attribute): return '.'.join((unwrap_attr(node.value), node.attr))
     else: return '.'.join((node.value.id, node.attr))
 
 
-# Internal Cell nr. 82
+# Internal Cell nr. 79
 def update_from_all_(node, names, c):
     "inplace, recursive update of set of names, by parsing the right side of a _all_ variable"
     if   isinstance(node, _ast.Str): names.add(node.s)
@@ -216,7 +211,7 @@ def update_from_all_(node, names, c):
     else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type. {info(c, node)}')
 
 
-# Internal Cell nr. 83
+# Internal Cell nr. 80
 def unwrap_assign(node, names, c):
     "inplace, recursive update of list of names"
     if   isinstance(node, _ast.Name)      : names.append(node.id)
@@ -230,11 +225,11 @@ def unwrap_assign(node, names, c):
     else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type. {info(c, node)}')
 
 
-# Internal Cell nr. 84
+# Internal Cell nr. 81
 def not_private(name): return not (name.startswith('_') and (not name.startswith('__')))
 
 
-# Internal Cell nr. 85
+# Internal Cell nr. 82
 def add_names_A(node, names, c):
     "Handle Assignments to variables"
     tmp_names = list()
@@ -252,7 +247,7 @@ def add_names_A(node, names, c):
             update_from_all_(node.value, names, c)
 
 
-# Internal Cell nr. 86
+# Internal Cell nr. 83
 def decorators(node):
     yield from [(d.id if isinstance(d, _ast.Name) else d.func.id) for d in node.decorator_list]
 
@@ -276,7 +271,7 @@ def add_names_FC(node, names, c, fastai_decorators=True):
     elif not_private(node.name): names.add(node.name)
 
 
-# Cell nr. 87
+# Cell nr. 84
 def find_names(code:str, context:Context=None) -> list:
     "Find all function, class and variable names in the given source code."
     tree = ast.parse(code)
@@ -288,7 +283,7 @@ def find_names(code:str, context:Context=None) -> list:
     return names
 
 
-# Internal Cell nr. 93
+# Internal Cell nr. 90
 def make_import_relative(p_from:Path, m_to:str)->str:
     "Convert a module `m_to` to a name relative to `p_from`."
     mods = m_to.split('.')
@@ -301,7 +296,7 @@ def make_import_relative(p_from:Path, m_to:str)->str:
     return '.' * len(splits) + '.'.join(mods)
 
 
-# Internal Cell nr. 97
+# Internal Cell nr. 94
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -315,7 +310,7 @@ re_import = ReLibName(fr"""
     """, re.VERBOSE | re.MULTILINE)
 
 
-# Cell nr. 98
+# Cell nr. 95
 def relativify_imports(origin:Path, code:str)->str:
     "Transform an absolute 'from LIB_NAME import module' into a relative import of 'module' wrt the library."
     def repl(match):
@@ -324,14 +319,14 @@ def relativify_imports(origin:Path, code:str)->str:
     return re_import.re.sub(repl,code)
 
 
-# Cell nr. 102
+# Cell nr. 99
 def init_config(lib_name='nbdev_rewrite', user='flpeters', nbs_path='.'):
     "create a config file, if it doesn't already exist"
     if not Config().config_file.exists(): create_config(lib_name=lib_name, user=user, nbs_path=nbs_path)
 init_config()
 
 
-# Cell nr. 103
+# Cell nr. 100
 def init_lib():
     "initialize the module folder, if it's not initialized already"
     C = Config()
@@ -343,7 +338,7 @@ def init_lib():
 init_lib()
 
 
-# Cell nr. 105
+# Cell nr. 102
 _reserved_dirs = (Config().lib_path, Config().nbs_path, Config().doc_path)
 def crawl_directory(path:Path, recurse:bool=True) -> list:
     "finds a list of ipynb files to convert"
@@ -365,19 +360,19 @@ def crawl_directory(path:Path, recurse:bool=True) -> list:
 list(crawl_directory(Config().nbs_path))
 
 
-# Cell nr. 106
+# Cell nr. 103
 def read_nb(fname:Path) -> dict:
     "Read the notebook in `fname`."
     with open(Path(fname),'r', encoding='utf8') as f: return dict(nbformat.reads(f.read(), as_version=4))
 
 
-# Cell nr. 108
+# Cell nr. 105
 @prefetch(max_prefetch=4)
 def file_generator(path:Path=Config().nbs_path) -> (Path, dict):
     for file_path in crawl_directory(path): yield (file_path, read_nb(file_path))
 
 
-# Internal Cell nr. 116
+# Internal Cell nr. 113
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -385,7 +380,7 @@ module = fr'(?:{identifier}\.)*{identifier}'
 module
 
 
-# Internal Cell nr. 117
+# Internal Cell nr. 114
 # https://docs.python.org/3/library/re.html
 re_match_module = re.compile(fr"""
         ^              # start of the string
@@ -394,7 +389,7 @@ re_match_module = re.compile(fr"""
         """, re.VERBOSE)
 
 
-# Cell nr. 119
+# Cell nr. 116
 def module_to_path(m:str)->Path:
     "Turn a module name into a path such that the exported file can be imported from the library "\
     "using the same expression."
@@ -408,20 +403,20 @@ def module_to_path(m:str)->Path:
     else: raise ValueError(f"'{m}' is not a valid module name.")
 
 
-# Internal Cell nr. 128
+# Internal Cell nr. 125
 def commonpath(*paths)->Path:
     "Given a sequence of path names, returns the longest common sub-path."
     return Path(os.path.commonpath(paths))
 
 
-# Internal Cell nr. 130
+# Internal Cell nr. 127
 def in_directory(p:Path, d:Path)->bool:
     "Tests if `p` is pointing to something in the directory `d`.\n"\
     "Expects both `p` and `d` to be fully resolved and absolute paths."
     return p.as_posix().startswith(d.as_posix())
 
 
-# Cell nr. 133
+# Cell nr. 130
 def make_valid_path(s:str)->Path:
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
     p, lib = Path(s), Config().path_to('lib')
@@ -435,7 +430,7 @@ def make_valid_path(s:str)->Path:
     else: raise ValueError(f"'{p.suffix}' is not a valid file ending. ('{s}')")
 
 
-# Cell nr. 144
+# Cell nr. 141
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -446,12 +441,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 145
+# Cell nr. 142
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 146
+# Cell nr. 143
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'use_scope': False})
 def kw_default_exp(file_info, cell_info, result, is_set):
@@ -471,7 +466,7 @@ def kw_default_exp(file_info, cell_info, result, is_set):
     file_info['export_scopes'][scope] = new_target
 
 
-# Cell nr. 147
+# Cell nr. 144
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False,
                         'cell_nr': 0, 'prepend': False, 'append': False})
@@ -506,7 +501,7 @@ def kw_export(file_info, cell_info, result, is_set):
 #     else: cls.to[targ].add(cell)
 
 
-# Internal Cell nr. 158
+# Internal Cell nr. 155
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -516,7 +511,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 161
+# Cell nr. 158
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
     pure_comments_only = True
@@ -598,7 +593,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 162
+# Cell nr. 159
 def load_and_parse_all(origin_path:Path, output_path:Path, recurse:bool, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
     # TODO: replace these two lines with a call to file_generator() defined above.
@@ -628,7 +623,7 @@ def load_and_parse_all(origin_path:Path, output_path:Path, recurse:bool, st:Stac
     return True, parsed_files
 
 
-# Cell nr. 171
+# Cell nr. 168
 def write_file(to:Path, orig:str, names:set, code:list, st:StackTrace) -> bool:
     sep:str = '\n\n\n'
     if orig is None:
@@ -649,7 +644,7 @@ def write_file(to:Path, orig:str, names:set, code:list, st:StackTrace) -> bool:
     with open(to, 'w', encoding='utf8') as f: f.write(file_content)
 
 
-# Cell nr. 172
+# Cell nr. 169
 def write_out_all(parsed_files, st:StackTrace) -> bool:
     # TODO: write one file at a time to disk, to the correct directory,
     # initialize a python module, if it doesn't already exists,
@@ -731,7 +726,7 @@ def write_out_all(parsed_files, st:StackTrace) -> bool:
     return 1
 
 
-# Cell nr. 174
+# Cell nr. 171
 def main(origin_path:str=None, output_path:str=None, recurse:bool=True) -> bool:
     st = StackTrace(main)
     origin_path:Path = Config().nbs_path if origin_path is None else Path(origin_path).resolve()
@@ -747,6 +742,6 @@ def main(origin_path:str=None, output_path:str=None, recurse:bool=True) -> bool:
     return success, parsed_files
 
 
-# Cell nr. 176
+# Cell nr. 173
 set_arg_parse_report_options(report_error=False)
 set_main_report_options()
