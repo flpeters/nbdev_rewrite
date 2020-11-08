@@ -395,17 +395,17 @@ re_match_module = re.compile(fr"""
 
 
 # Cell nr. 117
-def module_to_path(m:str)->Path:
+def module_to_path(m:str)->(bool, Path, Exception):
     "Turn a module name into a path such that the exported file can be imported from the library "\
     "using the same expression."
     if re_match_module.search(m) is not None:
         if m.endswith('.py'):
-            raise ValueError(f"The module name '{m}' is not valid, because ending on '.py' "\
-                             f"would produce a file called 'py.py' in the folder '{m.split('.')[-2]}', "\
-                              "which is most likely not what was intended.\nTo name a file 'py.py', use the "\
-                              "'-to_path' argument instead of '-to'.")
-        return Config().path_to('lib')/f"{os.path.sep.join(m.split('.'))}.py"
-    else: raise ValueError(f"'{m}' is not a valid module name.")
+            return False, None, ValueError(f"The module name '{m}' is not valid, because ending on '.py' "\
+                                f"would produce a file called 'py.py' in the folder '{m.split('.')[-2]}', "\
+                                 "which is most likely not what was intended.\nTo name a file 'py.py', use the "\
+                                 "'-to_path' argument instead of '-to'.")
+        return True, Config().path_to('lib')/f"{os.path.sep.join(m.split('.'))}.py", None
+    else: False, None, ValueError(f"'{m}' is not a valid module name.")
 
 
 # Internal Cell nr. 126
@@ -422,17 +422,18 @@ def in_directory(p:Path, d:Path)->bool:
 
 
 # Cell nr. 131
-def make_valid_path(s:str)->Path:
+def make_valid_path(s:str)->(bool, Path, Exception):
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
     p, lib = Path(s), Config().path_to('lib')
     is_abs = p.is_absolute()
     p = (p if is_abs else (lib/p)).absolute().resolve()
     if (not is_abs) and (not in_directory(p, lib)):
-        raise ValueError("Relative export path beyond top level directory of library is not allowed by default. "\
-                        f"Use an absolute path, or set <NOT IMPLEMENTED YET> flag on the command. ('{s}')")
-    if not p.suffix: raise ValueError(f"The path '{s}' is missing a file type suffix like '.py'.")
-    if p.suffix == '.py': return p
-    else: raise ValueError(f"'{p.suffix}' is not a valid file ending. ('{s}')")
+        return False, None, ValueError("Relative export path beyond top level directory of library"\
+                             "is not allowed by default. "\
+                            f"Use an absolute path, or set <NOT IMPLEMENTED YET> flag on the command. ('{s}')")
+    if not p.suffix: return False, None, ValueError(f"The path '{s}' is missing a file type suffix like '.py'.")
+    if p.suffix == '.py': return True, p, None
+    else: return False, None, ValueError(f"'{p.suffix}' is not a valid file ending. ('{s}')")
 
 
 # Cell nr. 142
@@ -464,9 +465,12 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     # NOTE: use this cells indentation level, or the default tuple([0]) as key to identify scope
     scope:tuple     = cell_info['scope'] if result['scoped'] else tuple([0])
     old_target:Path = file_info['export_scopes'].get(scope, None)
-    new_target:Path = (module_to_path(result['to'])
-                       if is_set['to'] else
-                       make_valid_path(result['to_path']))
+    conv_success, new_target, err = (module_to_path(result['to'])
+                                     if is_set['to'] else
+                                     make_valid_path(result['to_path']))
+    if not conv_success: # This dance is done in order not to create StackTrace instances all the time.
+        st._up.here(1)
+        return st.report_error(err)
     if old_target is not None:
         st._up.here(1)
         return st.report_error(ValueError(f"Overwriting an existing export target is not allowed."\
@@ -491,9 +495,12 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     is_internal = cell_info['is_internal'] = result['internal']
     if is_internal: pass # no contained names will be added to __all__ for importing
     else: cell_info['names'] = find_names(cell_info['original_source_code'])
-    export_target:Path = None
-    if is_set['to'     ]: export_target = module_to_path (result['to'])
-    if is_set['to_path']: export_target = make_valid_path(result['to_path'])
+    conv_success, export_target = True, None
+    if is_set['to'     ]: conv_success, export_target, err = module_to_path (result['to'])
+    if is_set['to_path']: conv_success, export_target, err = make_valid_path(result['to_path'])
+    if not conv_success: # This dance is done in order not to create StackTrace instances all the time.
+        st._up.here(1)
+        return st.report_error(err)
     if export_target is not None:
         if is_set['ignore_scope']:
             st._up.here(1)
