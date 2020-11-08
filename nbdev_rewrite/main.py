@@ -453,7 +453,7 @@ cmd2func     = {}
 
 # Cell nr. 144
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
-                  args={'to': '', 'to_path': '', 'use_scope': False})
+                  args={'to': '', 'to_path': '', 'scoped': False})
 def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     "Set the default file that cells of this notebook will be exported to."
     success:bool = True
@@ -462,7 +462,7 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
         return st.report_error(ValueError("The `default_exp` command expects exactly one of the arguments "\
                                f"'-to' or '-to_path' to be set, but recieved was: {result}"))
     # NOTE: use this cells indentation level, or the default tuple([0]) as key to identify scope
-    scope:tuple     = cell_info['scope'] if result['use_scope'] else tuple([0])
+    scope:tuple     = cell_info['scope'] if result['scoped'] else tuple([0])
     old_target:Path = file_info['export_scopes'].get(scope, None)
     new_target:Path = (module_to_path(result['to'])
                        if is_set['to'] else
