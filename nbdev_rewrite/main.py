@@ -165,7 +165,7 @@ def parse_comment(all_commands:dict, comment:str, st:StackTrace) -> (bool, str, 
         st.report_optional_error(KeyError(f"'{cmd}' is not a recognized command. See 'all_commands'."))
         return False, None, None, None
     
-    success, result, is_set = parse_arguments(all_commands[cmd], ' '.join(args))
+    success, result, is_set = parse_arguments(all_commands[cmd], args)
     if not success: return False, None, None, None
     
     return True, cmd, result, is_set

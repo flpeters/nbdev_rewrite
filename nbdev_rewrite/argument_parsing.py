@@ -110,19 +110,15 @@ def typify(type_or_value:object) -> (type, object):
 
 
 # Cell nr. 27; Comes from '00_export_v4.ipynb'
-def parse_arguments(command:dict, comment:str) -> (bool, dict, dict):
+def parse_arguments(command:dict, args:[str]) -> (bool, dict, dict):
     "Finds, casts, and returns values from command, in the given comment."    
-    members = command.keys()
-    result  = command.copy() # copy needed?
-    args    = comment.split()
     # TODO: check that the type of all commands is supported ahead of time?
     # TODO: handle quoted arguments?
-    
-    is_set = {member : False for member in members}
-    
-    state = {'args': args, 'name': '', 'cursor': 0,
-             'inside_array': False,}
-    
+    # TODO: support command aliases?
+    members = command.keys()
+    result  = command.copy()
+    is_set  = {member : False for member in members}
+    state   = {'args': args, 'name': '', 'cursor': 0, 'inside_array': False,}
     success = True
     while state['cursor'] < len(args): # for arg in args:
         arg = args[state['cursor']]
@@ -134,7 +130,7 @@ def parse_arguments(command:dict, comment:str) -> (bool, dict, dict):
         
         for key in members: # loop over keys of command (the things we're supposed to find)
             if key != arg: continue    
-            if is_set[key]: # TODO: improve error msg. maybe: "this is the second time this argument was given"?
+            if is_set[key]:
                 report_error(SyntaxError(f"Argument {state['cursor']} ('{arg}') was given multiple times."))
                 success = False
             else:
@@ -156,7 +152,7 @@ def parse_arguments(command:dict, comment:str) -> (bool, dict, dict):
 # Internal Cell nr. 28; Comes from '00_export_v4.ipynb'
 def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:object) -> bool:
     "Parse the input args based on arg_type, and set arg_name in result to that value."
-    # NOTE: state and result are modified from here and essentially treated as pointers
+    # NOTE: 'state' and 'result' are references not values, and modified from here.
     args     = state['args']
     arg_name = state['name']
     success  = True
@@ -174,8 +170,8 @@ def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:obje
                 bool_success, value = to_bool(value)
                 if bool_success: result[arg_name] = value
                 else:
-                    report_error(ValueError(f"Value of argument {state['cursor']-1} ('{arg_name}') \
-                    was not convertable to bool. Please use 'True', 'False', '0', or '1'. (It was '{value}')"))
+                    report_error(ValueError(f"Value of argument {state['cursor']-1} ('{arg_name}') "\
+                    f"was not convertable to bool. Please use 'True', 'False', '0', or '1'. (It was '{value}')"))
                     success = False
             else: success = False
         # special case where supplying the argument means True and not supplying it means use the default (False)
@@ -189,11 +185,11 @@ def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:obje
         if int_success:
             result[arg_name] = value
             if remainder:
-                report_warning(f"Junk on the end of the value for int argument \
-                               {state['cursor']-1} ('{arg_name}'): {remainder}")
+                report_warning("Junk on the end of the value for int argument "\
+                              f"{state['cursor']-1} ('{arg_name}'): {remainder}")
         else:
-            report_error(ValueError(f"Value of argument {state['cursor']-1} ('{arg_name}') \
-                                    was not an int. (It was '{value}')"))
+            report_error(ValueError(f"Value of argument {state['cursor']-1} ('{arg_name}') "\
+                                    f"was not an int. (It was '{value}')"))
             success = False
 
     elif arg_type == float:
@@ -203,8 +199,8 @@ def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:obje
         float_success, value = to_float(value)
         if float_success: result[arg_name] = value
         else:
-            report_error(ValueError(f"Value of argument {state['cursor']-1} ('{arg_name}') \
-                                    was not a float. (It was '{value}')"))
+            report_error(ValueError(f"Value of argument {state['cursor']-1} ('{arg_name}') "\
+                                    f"was not a float. (It was '{value}')"))
             success = False
 
     elif arg_type == list or arg_type == tuple:
@@ -212,15 +208,13 @@ def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:obje
             if state['inside_array']:
                 report_error(SyntaxError(f"Using an unbounded list or tuple inside an array is not supported."))
                 return False
-            
             array_success, state['cursor'], value = to_unbounded_array(args, state['cursor'])
             if array_success: # NOTE: currently this can't actually fail... don't use unbounded lists kids.
                 result[arg_name] = arg_type(value)
             else: success = False
             
         else: # predefined list
-            s = {'args': args, 'name': 'v', 'cursor': state['cursor'],
-                 'inside_array': True}
+            s = {'args': args, 'name': 'v', 'cursor': state['cursor'], 'inside_array': True}
             value = []
             for i, x in enumerate(arg_default):
                 t, d = typify(x)
@@ -251,16 +245,20 @@ def check_is_set(result:dict, is_set:dict) -> bool:
         arg_type, arg_default = typify(result[member])
         if arg_default is None: 
             if arg_type == bool: # NOTE: Special case, not setting a boolean means it's False.
-                result[member] = False # TODO: set is_set as well? what's the use-case here?
+                result[member] = False
                 continue
             report_error(ValueError(f"Argument '{member}' has not been set, and no default value was given."))
             success = False
         elif (arg_type == list) or (arg_type == tuple): # this is a bounded list
+            # generate list of names with python indexing syntax for better error reporting.
             name = [f'{member}[{i}]' for i in range(len(arg_default))]
+            # create a new 'result' dict, mapping the 'idx names' to each of the values of the list.
             r = {n:x for n, x in zip(name, arg_default)}
+            # since the entire list hasn't been set, each part of the list has also not been set.
             s = {n:False for n in r}
+            # recurse, treating the members of the list as if they comprised a separate command.
             is_set_success = check_is_set(r, s)
-            if is_set_success: # re-set result
+            if is_set_success: # re-set result if all members of the list have a default value.
                 result[member] = arg_type([r[n] for n in name])
                 continue
             else: success = False
