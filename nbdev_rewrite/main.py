@@ -24,7 +24,7 @@ import _ast
 # Only import if executing as a python file, because then argument_parsing is in a different file.
 if (__name__ != '__main__') or ('parse_arguments' not in globals()):
     from .argument_parsing import *
-    assert 'parse_arguments' in globals(), "Missing the 'parse_arguments' function after import."
+assert 'parse_arguments' in globals(), "Missing the 'parse_arguments' function."
 
 
 # Internal Cell nr. 45
