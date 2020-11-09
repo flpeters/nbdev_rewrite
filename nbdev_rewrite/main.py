@@ -52,7 +52,7 @@ class StackTrace:
     span:(int, int) = None
         
     def __init__(self, namespace:object, up:StackTrace=None):
-        self.namespace = namespace.__qualname__ if namespace else None
+        self.namespace = f'<{namespace.__qualname__}>()' if namespace else '<module>'
         self._up, self.lineno = up, currentframe().f_back.f_lineno
         
     @classmethod
@@ -62,11 +62,13 @@ class StackTrace:
         return st
     
     def here(self, offset:int=0): self.lineno = (currentframe().f_back.f_lineno + offset)
-        
+    def ln(self):
+        self.lineno = currentframe().f_back.f_lineno
+        return self  
     def up(self, up:StackTrace):
         self._up=up
         return self
-        
+    
     def __repr__(self):
         ln = self.lineno
         if self.extern:
@@ -79,7 +81,7 @@ class StackTrace:
             return s
         else: # the default
             return f"{'' if self._up is None else self._up.__repr__()}"\
-                   f"<{__name__}>, line {ln} in <{self.namespace}>\n"
+                   f"<{__name__}>, line {ln} in {self.namespace}\n"
     
     def report_error(self, err:Exception, lineno=None, excerpt=None, span:(int, int)=None, _continue=False):
         if lineno: self.lineno = lineno
@@ -146,22 +148,26 @@ def parse_comment(all_commands:dict, comment:str, st:StackTrace) -> (bool, str, 
     "Finds command names and arguments in comments and parses them with parse_arguments()"
     res = re_match_comment.search(comment)
     if not res:
+        st._up.here(1)
         st.report_optional_error(SyntaxError('Not a valid comment syntax.'))
         return False, None, None, None
     
     all_args = res.groups()[0].split()
     if len(all_args) == 0:
+        st._up.here(1)
         st.report_optional_error(SyntaxError(f"Need at least one argument in comment. Reveived: '{comment}'"))
         return False, None, None, None
     
     cmd, *args = all_args
     if cmd[0] != '+':
+        st._up.here(1)
         st.report_optional_error(SyntaxError("The first argument (the command to execute) does not start with a '+'."\
                                             f"It was: '{cmd}'"), span=(1, 3))
         return False, None, None, None
     
     cmd = cmd[1:] # remove the '+'
     if cmd not in all_commands:
+        st._up.here(1)
         st.report_optional_error(KeyError(f"'{cmd}' is not a recognized command. See 'all_commands'."))
         return False, None, None, None
     
@@ -526,6 +532,7 @@ re_match_heading = re.compile(r"""
 # Cell nr. 157
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
+    st = StackTrace(parse_file, up=st)
     pure_comments_only = True
     nb_version:(int, int) = (file['nbformat'], file['nbformat_minor'])
     metadata  :dict       =  file['metadata']
@@ -545,7 +552,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     cells:list = file_info['cells']
     
     f_st  = StackTrace.ext(file=file_info['relative_origin'])
-    pc_st = StackTrace(parse_comment, up=st)    
+    pc_st = StackTrace(parse_comment)    
     
     for i, cell in enumerate(file['cells']):
         cell_type   = cell['cell_type']
@@ -568,14 +575,14 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
             f_st.cellno = i
             comments_to_remove = []
             for comment, (lineno, charno) in iter_comments(cell_source, pure_comments_only, line_limit=None):
-                f_st.lineno = lineno
+                f_st.lineno = lineno + 1 # zero counting offset
                 f_st.excerpt = comment
-                parsing_success, cmd, result, is_set = parse_comment(all_commands, comment, st=f_st.up(pc_st))
+                parsing_success, cmd, result, is_set = parse_comment(all_commands,comment,st=f_st.up(pc_st.up(st.ln())))
                 if not parsing_success: continue
                 print(f'Found: {cmd} @ ({i}, {lineno}, {charno}) with args: {result}')
                 if cmd in cmd2func:
                     func, cmd_st = cmd2func[cmd]
-                    cmd_success = func(file_info, cell_info, result, is_set, st=f_st.up(cmd_st.up(st)))
+                    cmd_success = func(file_info, cell_info, result, is_set, st=f_st.up(cmd_st.up(st.ln())))
                     if not cmd_success: return False, file_info # TODO: Stop at first error or continue?
                 else: raise ValueError(f"The command '{cmd}' in cell number {i} is recognized, "\
                                         "but is missing a corresponding action mapping in cmd2func.")
@@ -612,6 +619,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
 def load_and_parse_all(origin_path:Path, output_path:Path, recurse:bool, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
     success:bool = True
+    st = StackTrace(load_and_parse_all, up=st)
     # TODO: replace these two lines with a call to file_generator() defined above.
     file_paths:list = crawl_directory(Config().nbs_path)
     
@@ -627,7 +635,7 @@ def load_and_parse_all(origin_path:Path, output_path:Path, recurse:bool, st:Stac
     # TODO: use multithreading / multiprocessing per file / per bunch of cells
     for file_path, file in file_generator:
         # if file_path.name != THIS_FILE: continue # For Debugging
-        parse_success, file = parse_file(file_path, file, st=StackTrace(parse_file, up=st))
+        parse_success, file = parse_file(file_path, file, st=st.ln())
         if not parse_success:
             success = False # TODO: Stop at first error or continue?
         # TODO: before returning, give any meta programm a chance to run.
@@ -742,25 +750,22 @@ def write_out_all(parsed_files, st:StackTrace) -> bool:
 
 
 # Cell nr. 170
-def main(origin_path:str=None, output_path:str=None, recurse:bool=True) -> bool:
+def main(origin_path:str=None, output_path:str=None, recurse:bool=True, st:StackTrace=StackTrace(None)) -> bool:
     success:bool = True
-    st = StackTrace(main)
+    st = StackTrace(main, up=st)
     origin_path:Path = Config().nbs_path if origin_path is None else Path(origin_path).resolve()
     output_path:Path = Config().lib_path if output_path is None else Path(output_path).resolve()
     
-    parse_success, parsed_files = load_and_parse_all(origin_path, output_path, recurse,
-                                               st=StackTrace(load_and_parse_all, up=st))
+    parse_success, parsed_files = load_and_parse_all(origin_path, output_path, recurse, st=st.ln())
     if not parse_success:
-        st.here(1)
-        st.report_error(Exception('At least one Error has occured during parsing. '\
+        st.ln().report_error(Exception('At least one Error has occured during parsing. '\
                                   'No files have been modified. Exiting.'))
         return False, parsed_files
     # NOTE: At this point all files are completely parsed, and any meta programm has run.
     
     write_success = write_out_all(parsed_files, st=StackTrace(write_out_all, st))
     if not write_success:
-        st.here(1)
-        st.report_error(Exception('At least one Error has occured during exporting. '\
+        st.ln().report_error(Exception('At least one Error has occured during exporting. '\
                                   'Some files might have been written to disk and others not, '\
                                   'however no partial files have been written. Exiting.'))
         return False, parsed_files
@@ -769,4 +774,4 @@ def main(origin_path:str=None, output_path:str=None, recurse:bool=True) -> bool:
 
 # Cell nr. 172
 set_arg_parse_report_options(report_error=False)
-set_main_report_options()
+set_main_report_options(report_optional_error=False)
