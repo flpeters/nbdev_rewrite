@@ -446,17 +446,18 @@ re_match_module = re.compile(fr"""
 
 
 # Cell nr. 122
-def module_to_path(m:str)->(bool, Path, Exception):
+@traced
+def module_to_path(m:str, st:StackTrace)->(bool, Path):
     "Turn a module name into a path such that the exported file can be imported from the library "\
     "using the same expression."
     if re_match_module.search(m) is not None:
         if m.endswith('.py'):
-            return False, None, ValueError(f"The module name '{m}' is not valid, because ending on '.py' "\
+            return st.report_error(ValueError(f"The module name '{m}' is not valid, because ending on '.py' "\
                                 f"would produce a file called 'py.py' in the folder '{m.split('.')[-2]}', "\
                                  "which is most likely not what was intended.\nTo name a file 'py.py', use the "\
-                                 "'-to_path' argument instead of '-to'.")
-        return True, Config().path_to('lib')/f"{os.path.sep.join(m.split('.'))}.py", None
-    else: False, None, ValueError(f"'{m}' is not a valid module name.")
+                                 "'-to_path' argument instead of '-to'.")), None
+        return True, Config().path_to('lib')/f"{os.path.sep.join(m.split('.'))}.py"
+    else: return st.report_error(ValueError(f"'{m}' is not a valid module name.")), None
 
 
 # Internal Cell nr. 131
@@ -473,21 +474,23 @@ def in_directory(p:Path, d:Path)->bool:
 
 
 # Cell nr. 136
-def make_valid_path(s:str)->(bool, Path, Exception):
+@traced
+def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
     p, lib = Path(s), Config().path_to('lib')
     is_abs = p.is_absolute()
     p = (p if is_abs else (lib/p)).absolute().resolve()
     if (not is_abs) and (not in_directory(p, lib)):
-        return False, None, ValueError("Relative export path beyond top level directory of library"\
-                             "is not allowed by default. "\
-                            f"Use an absolute path, or set <NOT IMPLEMENTED YET> flag on the command. ('{s}')")
-    if not p.suffix: return False, None, ValueError(f"The path '{s}' is missing a file type suffix like '.py'.")
-    if p.suffix == '.py': return True, p, None
-    else: return False, None, ValueError(f"'{p.suffix}' is not a valid file ending. ('{s}')")
+        return st.report_error(ValueError("Relative export path beyond top level directory of library"\
+                                          "is not allowed by default. Use an absolute path, "\
+                                          f"or set <NOT IMPLEMENTED YET> flag on the command. ('{s}')")), None
+    if not p.suffix:
+        return st.report_error(ValueError(f"The path '{s}' is missing a file type suffix like '.py'.")), None
+    if p.suffix == '.py': return True, p
+    else: return st.report_error(ValueError(f"Expected '.py' file ending, but got '{p.suffix}'. ('{s}')")), None
 
 
-# Cell nr. 147
+# Cell nr. 148
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -498,12 +501,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 148
+# Cell nr. 149
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 150
+# Cell nr. 151
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'scoped': False})
 @traced
@@ -516,11 +519,10 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     # NOTE: use this cells indentation level, or the default tuple([0]) as key to identify scope
     scope:tuple     = cell_info['scope'] if result['scoped'] else tuple([0])
     old_target:Path = file_info['export_scopes'].get(scope, None)
-    conv_success, new_target, err = (module_to_path(result['to'])
-                                     if is_set['to'] else
-                                     make_valid_path(result['to_path']))
-    if not conv_success: # This dance is done in order not to create StackTrace instances all the time.
-        return st.report_error(err)
+    conv_success, new_target = (module_to_path(result['to'])
+                                if is_set['to'] else
+                                make_valid_path(result['to_path']))
+    if not conv_success: return False
     if old_target is not None:
         return st.report_error(ValueError(f"Overwriting an existing export target is not allowed."\
                                f"\n\twas: '{old_target}'\n\tnew: '{new_target}'"))
@@ -528,7 +530,7 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 152
+# Cell nr. 153
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False,
                         'cell_nr': 0, 'prepend': False, 'append': False})
@@ -545,10 +547,9 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     if is_internal: pass # no contained names will be added to __all__ for importing
     else: cell_info['names'] = find_names(cell_info['original_source_code'])
     conv_success, export_target = True, None
-    if is_set['to'     ]: conv_success, export_target, err = module_to_path (result['to'])
-    if is_set['to_path']: conv_success, export_target, err = make_valid_path(result['to_path'])
-    if not conv_success: # This dance is done in order not to create StackTrace instances all the time.
-        return st.report_error(err)
+    if is_set['to'     ]: conv_success, export_target = module_to_path (result['to'])
+    if is_set['to_path']: conv_success, export_target = make_valid_path(result['to_path'])
+    if not conv_success: return False
     if export_target is not None:
         if is_set['ignore_scope']:
             return st.report_error(ValueError("Setting 'ignore_scope' is not allowed when exporting to "\
@@ -560,7 +561,7 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Internal Cell nr. 163
+# Internal Cell nr. 164
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -570,7 +571,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 165
+# Cell nr. 166
 @traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
@@ -654,7 +655,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 166
+# Cell nr. 167
 @traced
 def load_and_parse_all(origin_path:Path, output_path:Path, recurse:bool, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -684,7 +685,7 @@ def load_and_parse_all(origin_path:Path, output_path:Path, recurse:bool, st:Stac
     return success, parsed_files
 
 
-# Cell nr. 175
+# Cell nr. 176
 @traced
 def write_file(to:Path, orig:str, names:set, code:list, st:StackTrace) -> bool:
     sep:str = '\n\n\n'
@@ -706,7 +707,7 @@ def write_file(to:Path, orig:str, names:set, code:list, st:StackTrace) -> bool:
     with open(to, 'w', encoding='utf8') as f: f.write(file_content)
 
 
-# Cell nr. 176
+# Cell nr. 177
 @traced
 def write_out_all(parsed_files, st:StackTrace) -> bool:
     # TODO: write one file at a time to disk, to the correct directory,
@@ -789,7 +790,7 @@ def write_out_all(parsed_files, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 178
+# Cell nr. 179
 @traced
 def main(origin_path:str=None, output_path:str=None, recurse:bool=True, st:StackTrace=None) -> bool:
     success:bool = True
@@ -812,6 +813,6 @@ def main(origin_path:str=None, output_path:str=None, recurse:bool=True, st:Stack
     return success, parsed_files
 
 
-# Cell nr. 180
+# Cell nr. 181
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False)
