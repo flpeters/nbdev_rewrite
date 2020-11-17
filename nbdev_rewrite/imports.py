@@ -1,5 +1,6 @@
 import os,re,json,glob,collections,pickle,shutil,nbformat,inspect,yaml,tempfile,enum,stat,time,random
 import importlib.util
+import functools
 from pdb import set_trace
 from configparser import ConfigParser
 from pathlib import Path
@@ -178,6 +179,7 @@ class prefetch:
     def __call__(self, gen):
         def wrapper(*args,**kwargs):
             return BackgroundGenerator(gen(*args,**kwargs), max_prefetch=self.max_prefetch)
+        functools.update_wrapper(wrapper, gen)
         return wrapper
 
 ###############################################################
