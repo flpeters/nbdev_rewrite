@@ -527,7 +527,11 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     if old_target is not None:
         return st.report_error(ValueError(f"Overwriting an existing export target is not allowed."\
                                f"\n\twas: '{old_target}'\n\tnew: '{new_target}'"))
-    file_info['export_scopes'][scope] = new_target
+    file_info['export_scopes'][scope] = {
+        'target' : new_target,
+        'add_dunder_all' : True,
+        'cell_info' : cell_info,
+    }
     return success
 
 
@@ -728,12 +732,13 @@ def write_out_all(parsed_files, st:StackTrace) -> bool:
         scopes:dict  = file_info['export_scopes']
         assert zero_tuple in scopes, 'No default in export Scopes.'
         scopes_available:bool = (len(scopes) > 1)
-        default_export:Path = scopes[zero_tuple]
+        default_scope   :dict = scopes[zero_tuple]
         # NOTE: Having no default is ok, as long as all cells still have a valid export target
-        none_default  :bool = (default_export is None)
+        none_default    :bool = (default_scope is None)
+        default_export  :Path = None if none_default else default_scope['target']
             
-        if not none_default:
-            default_state = export_files[default_export]
+        if not none_default: # set origin of a whole file
+            default_state:dict = export_files[default_export]
             if (default_state['orig'] is None): default_state['orig'] = rel_orig
             else: raise ValueError(f'Multiple files have {default_export} as the default export target. '\
                                    f'(old: {default_state["orig"]} | new: {rel_orig})')
@@ -761,7 +766,7 @@ def write_out_all(parsed_files, st:StackTrace) -> bool:
                         if ((len(k) > best_fit_len) # Trying to find the tightest fit
                             and (k == cell_scope[:len(k)])): # iff cell is part of this scope
                             best_fit, best_fit_len = k, len(k)
-                    to:Path = scopes[best_fit]
+                    to:Path = scopes[best_fit]['target']
                     if (best_fit == zero_tuple) or (to == default_export):
                         cell['export_to_default'] += cell['export_to_scope']
                         pass
@@ -777,7 +782,7 @@ def write_out_all(parsed_files, st:StackTrace) -> bool:
                 if none_default:
                     raise ValueError(f'Export Target of cell {cell["cell_nr"]} is None. '\
                                      'Did you forget to add a default target using `default_exp`?')
-                to = default_export
+                to:Path = default_export
                 state:dict = export_files[to]
                 if not cell['is_internal']: state['names'].update(cell['names'])
                 for _ in range(cell['export_to_default']):
