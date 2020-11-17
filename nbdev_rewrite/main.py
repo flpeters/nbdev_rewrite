@@ -520,9 +520,9 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     # NOTE: use this cells indentation level, or the default tuple([0]) as key to identify scope
     scope:tuple     = cell_info['scope'] if result['scoped'] else tuple([0])
     old_target:Path = file_info['export_scopes'].get(scope, None)
-    conv_success, new_target = (module_to_path(result['to'])
+    conv_success, new_target = (module_to_path(result['to'], st=st)
                                 if is_set['to'] else
-                                make_valid_path(result['to_path']))
+                                make_valid_path(result['to_path'], st=st))
     if not conv_success: return False
     if old_target is not None:
         return st.report_error(ValueError(f"Overwriting an existing export target is not allowed."\
@@ -548,8 +548,8 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     if is_internal: pass # no contained names will be added to __all__ for importing
     else: cell_info['names'] = find_names(cell_info['original_source_code'])
     conv_success, export_target = True, None
-    if is_set['to'     ]: conv_success, export_target = module_to_path (result['to'])
-    if is_set['to_path']: conv_success, export_target = make_valid_path(result['to_path'])
+    if is_set['to'     ]: conv_success, export_target = module_to_path (result['to'], st=st)
+    if is_set['to_path']: conv_success, export_target = make_valid_path(result['to_path'], st=st)
     if not conv_success: return False
     if export_target is not None:
         if is_set['ignore_scope']:
