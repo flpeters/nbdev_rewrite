@@ -7,20 +7,15 @@ MODULE__IMPORTS__FLAG = None
 
 
 # Cell nr. 40; Comes from '00_export_v4.ipynb'
-import os,re,json,glob,collections,pickle,shutil,nbformat,inspect,yaml,tempfile,enum,stat,time,random
-import importlib.util
-import functools
+import os,re,functools
 import concurrent.futures
 from threading import Thread
 from queue import Queue
-from pdb import set_trace
 from configparser import ConfigParser
 from pathlib import Path
-from textwrap import TextWrapper
-from typing import Union,Optional
-from nbformat.sign import NotebookNotary
-from functools import partial,lru_cache
-from base64 import b64decode,b64encode
+# from nbformat.sign import NotebookNotary
+# from base64 import b64decode,b64encode
+# from types import MethodType,FunctionType
 
 
 # Cell nr. 42; Comes from '00_export_v4.ipynb'
@@ -63,7 +58,7 @@ def _add_new_defaults(cfg, file, **kwargs):
 
 
 # Cell nr. 49; Comes from '00_export_v4.ipynb'
-@lru_cache(maxsize=None)
+@functools.lru_cache(maxsize=None)
 class Config:
     "Store the basic information for nbdev to work"
     def __init__(self, cfg_name='settings.ini'):
@@ -73,7 +68,9 @@ class Config:
         assert self.config_file.exists(), f"Could not find {cfg_name}"
         self.d = read_config_file(self.config_file)['DEFAULT']
         _add_new_defaults(self.d, self.config_file,
-                         host="github", doc_host="https://%(user)s.github.io", doc_baseurl="/%(lib_name)s/")
+                          host="github",
+                          doc_host="https://%(user)s.github.io",
+                          doc_baseurl="/%(lib_name)s/")
 
     def __getattr__(self,k):
         if k.endswith('_path'): return self._path_to(k)
@@ -114,8 +111,7 @@ def in_ipython():
         'ipython'          in program_name or # ipython
         'JPY_PARENT_PID'   in os.environ):    # ipython-notebook
         return True
-    else:
-        return False
+    else: return False
 IN_IPYTHON = in_ipython()
 
 
@@ -145,7 +141,7 @@ IN_NOTEBOOK = in_notebook()
 # Cell nr. 56; Comes from '00_export_v4.ipynb'
 def num_cpus():
     "Get number of cpus"
-    try:                   return len(os.sched_getaffinity(0))
+    try:                   return len(os.sched_getaffinity(0)) # NOTE: not available on all platforms
     except AttributeError: return os.cpu_count()
 
 
@@ -159,7 +155,7 @@ class ProcessPoolExecutor(concurrent.futures.ProcessPoolExecutor):
         super().__init__(max_workers, **kwargs)
 
     def map(self, f, items, *args, **kwargs):
-        g = partial(f, *args, **kwargs)
+        g = functools.partial(f, *args, **kwargs)
         if self.not_parallel: return map(g, items)
         try: return super().map(g, items)
         except Exception as e: self.on_exc(e)
@@ -175,42 +171,51 @@ def parallel(f, items, *args, n_workers=None, **kwargs):
 
 
 # Cell nr. 59; Comes from '00_export_v4.ipynb'
+# https://github.com/justheuristic/prefetch_generator
 class BackgroundGenerator(Thread):
-    "Transform a generator into a prefetched background thread."
-    # https://github.com/justheuristic/prefetch_generator
-    def __init__(self, generator, max_prefetch:int=1):
+    "Computes elements of a Generator in a background Thread."
+    def __init__(self, generator, max_prefetch:int=-1):
         """
-        - generator: generator to wrap and prefetch in background
-        - max_prefetch: How many items are prefetch at any moment of time.
-        If max_prefetch is <= 0, the queue size is infinite.
+        `generator`: A Generator to wrap and prefetch from in a separate thread.
+        `max_prefetch`: How many items to maximally prefetch at any given time.
+        If `max_prefetch` is <= 0, then the queue size is infinite.
         """
         super().__init__()
         self.queue, self.generator, self.daemon = Queue(max_prefetch), generator, True
         self.start()
+    
     def run(self):
         try:
             for item in self.generator: self.queue.put(item)
         except Exception as e:
             print('WARNING: Failed in BackgroundGenerator Thread!')
             raise e
-        finally: self.queue.put(None)
+        finally: self.queue.put(StopIteration)
+    
     def __iter__(self): return self
     def __next__(self):
         next_item = self.queue.get()
-        if next_item is None: raise StopIteration
+        if next_item is StopIteration: raise StopIteration
         return next_item
 
 
 # Cell nr. 60; Comes from '00_export_v4.ipynb'
-class prefetch:
-    "Decorator for making a BackgroundGenerator."
-    # https://github.com/justheuristic/prefetch_generator
-    def __init__(self, max_prefetch:int=1): self.max_prefetch = max_prefetch
-    def __call__(self, gen):
+def prefetch(max_prefetch:int=-1):
+    """
+    Decorator for wrapping a `yield`-ing Function with `BackgroundGenerator`,
+    which computes elements of the generator in a background Thread.
+    
+    A new instance of `BackgroundGenerator` is created every time the decorated function is called.
+    
+    `max_prefetch`: How many items to maximally prefetch at any given time.
+    If `max_prefetch` is <= 0, then the queue size is infinite.
+    """
+    def decorator(generator):
         def wrapper(*args,**kwargs):
-            return BackgroundGenerator(gen(*args,**kwargs), max_prefetch=self.max_prefetch)
-        functools.update_wrapper(wrapper, gen)
+            return BackgroundGenerator(generator(*args,**kwargs), max_prefetch=max_prefetch)
+        functools.update_wrapper(wrapper, generator)
         return wrapper
+    return decorator
 
 
 # Cell nr. 62; Comes from '00_export_v4.ipynb'
@@ -227,7 +232,8 @@ class ReLibName():
 
 # Cell nr. 64; Comes from '00_export_v4.ipynb'
 def compose(*funcs, order=None):
-    "Create a function that composes all functions in `funcs`, passing along remaining `*args` and `**kwargs` to all"
+    "Create a function that composes all functions in `funcs`, "\
+    "passing along remaining `*args` and `**kwargs` to all"
     if len(funcs)==0: return noop
     if len(funcs)==1: return funcs[0]
     def _inner(x, *args, **kwargs):

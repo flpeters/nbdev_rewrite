@@ -10,15 +10,9 @@ MODULE__MAIN__FLAG = None
 
 
 # Cell nr. 70
-from collections import namedtuple, defaultdict
-import os
-import re
-
+from collections import defaultdict
 from inspect import signature, currentframe, getfullargspec
-
-import functools
-from types import MethodType,FunctionType
-
+import nbformat
 import ast
 from ast import iter_fields, AST
 import _ast
@@ -312,8 +306,15 @@ def add_names_A(node, names, c):
 
 
 # Internal Cell nr. 121
-def decorators(node):
-    yield from [(d.id if isinstance(d, _ast.Name) else d.func.id) for d in node.decorator_list]
+def resolve_decorator_name(node):
+    if   isinstance(node, _ast.Name): return node.id
+    elif isinstance(node, _ast.Call):
+        if   isinstance(node.func, _ast.Name     ): return node.func.id
+        elif isinstance(node.func, _ast.Attribute): return unwrap_attr(node.func)
+    elif isinstance(node, _ast.Attribute): return unwrap_attr(node)
+    raise SyntaxError(f'Can\'t resolve decorator {node} to name, unknown type. {info(c, node)}')
+
+def decorators(node): yield from (resolve_decorator_name(d) for d in node.decorator_list)
 
 def fastai_patch(cls, node, names, c):
     if   isinstance(cls, _ast.Name):
@@ -434,20 +435,20 @@ def module_to_path(m:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"'{m}' is not a valid module name.")), None
 
 
-# Internal Cell nr. 155
+# Internal Cell nr. 153
 def commonpath(*paths)->Path:
     "Given a sequence of path names, returns the longest common sub-path."
     return Path(os.path.commonpath(paths))
 
 
-# Internal Cell nr. 157
+# Internal Cell nr. 155
 def in_directory(p:Path, d:Path)->bool:
     "Tests if `p` is pointing to something in the directory `d`.\n"\
     "Expects both `p` and `d` to be fully resolved and absolute paths."
     return p.as_posix().startswith(d.as_posix())
 
 
-# Cell nr. 160
+# Cell nr. 158
 @traced
 def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
@@ -464,7 +465,7 @@ def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"Expected '.py' file ending, but got '{p.suffix}'. ('{s}')")), None
 
 
-# Cell nr. 167
+# Cell nr. 165
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -475,12 +476,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 168
+# Cell nr. 166
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 170
+# Cell nr. 168
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'no_dunder_all': False, 'scoped': False})
 @traced
@@ -511,7 +512,7 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 172
+# Cell nr. 170
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False,
                         'prepend': False, 'append': False})
@@ -541,7 +542,7 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 182
+# Cell nr. 180
 _reserved_dirs = (Config().lib_path, Config().doc_path)
 def crawl_directory(path:Path, recurse:bool=True) -> list:
     "Crawl the `path` directory for a list of .ipynb files."
@@ -563,20 +564,20 @@ def crawl_directory(path:Path, recurse:bool=True) -> list:
                 else: continue
 
 
-# Cell nr. 183
+# Cell nr. 181
 def read_nb(fname:Path) -> dict:
     "Read the `fname` notebook."
     with open(Path(fname),'r', encoding='utf8') as f: return dict(nbformat.reads(f.read(), as_version=4))
 
 
-# Cell nr. 184
+# Cell nr. 182
 @prefetch(max_prefetch=-1) # NOTE: max_prefetch <= 0 means the queue size is infinite
 def async_load_notebooks(path:Path=Config().nbs_path, recurse:bool=True) -> (Path, dict):
     "Crawl for notebooks in the `path` directory, and load in a background thread."
     for file_path in crawl_directory(path, recurse): yield (file_path, read_nb(file_path))
 
 
-# Internal Cell nr. 190
+# Internal Cell nr. 188
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -586,7 +587,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 192
+# Cell nr. 190
 @traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
@@ -670,7 +671,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 193
+# Cell nr. 191
 @traced
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -692,7 +693,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     return success, parsed_files
 
 
-# Cell nr. 195
+# Cell nr. 193
 @traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     # TODO: write one file at a time to disk, to the correct directory,
@@ -791,7 +792,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, export_files
 
 
-# Cell nr. 202
+# Cell nr. 200
 @traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -820,7 +821,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 203
+# Cell nr. 201
 @traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     # print(dict(export_files))
@@ -831,7 +832,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 205
+# Cell nr. 203
 @traced
 def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     "Load, Parse, Merge, and Write .ipynb files to .py files."
@@ -869,6 +870,6 @@ def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=
     return success, parsed_files, merged_files
 
 
-# Cell nr. 207
+# Cell nr. 205
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False)
