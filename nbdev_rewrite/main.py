@@ -492,7 +492,7 @@ def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"Expected '.py' file ending, but got '{p.suffix}'. ('{s}')")), None
 
 
-# Cell nr. 150
+# Cell nr. 145
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -503,12 +503,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 151
+# Cell nr. 146
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 153
+# Cell nr. 148
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'no_dunder_all': False, 'scoped': False})
 @traced
@@ -539,10 +539,10 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 155
+# Cell nr. 150
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False,
-                        'cell_nr': 0, 'prepend': False, 'append': False})
+                        'prepend': False, 'append': False})
 @traced
 def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     "This cell will be exported from the notebook to a .py file."
@@ -551,7 +551,6 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
         return st.report_error(ValueError("The `export` command does not accept the '-to' and '-to_path' "\
                                f"argument at the same time. They are mutually exclusive. Received: {result}"))
     cell_info['export_to_py'] = True # Using this command implicitly means to export this cell
-    if is_set['cell_nr']: cell_info['cell_nr'] = result['cell_nr'] # overwrite the cell_nr of this cell
     is_internal = cell_info['is_internal'] = result['internal']
     if is_internal: pass # no contained names will be added to __all__ for importing
     else: cell_info['names'] = find_names(cell_info['original_source_code'])
@@ -570,7 +569,7 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Internal Cell nr. 166
+# Internal Cell nr. 161
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -580,7 +579,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 168
+# Cell nr. 163
 @traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
@@ -664,7 +663,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 169
+# Cell nr. 164
 @traced
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -673,7 +672,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
         # Add flags and settings variables above this line
         'files': list()
     }
-    # TODO: use multithreading / multiprocessing per file / per bunch of cells
+    # TODO: use multithreading / multiprocessing per file / per n cells
     for file_path, file in file_generator:
         # if file_path.name != THIS_FILE: continue # For Debugging
         parse_success, file = parse_file(file_path, file, st=st)
@@ -686,7 +685,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     return success, parsed_files
 
 
-# Cell nr. 171
+# Cell nr. 166
 @traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     # TODO: write one file at a time to disk, to the correct directory,
@@ -785,7 +784,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, export_files
 
 
-# Cell nr. 180
+# Cell nr. 175
 @traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -814,7 +813,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 181
+# Cell nr. 176
 @traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     # print(dict(export_files))
@@ -825,7 +824,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 183
+# Cell nr. 178
 @traced
 def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     "Load, Parse, Merge, and Write .ipynb files to .py files."
@@ -837,27 +836,32 @@ def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=
     
     # NOTE: LOAD
     notebooks = file_generator(path=nbs_path, recurse=recurse)
+    
     # NOTE: PARSE
     parse_success, parsed_files = parse_all(notebooks, st=st)
     if not parse_success:
         st.report_error(Exception('At least one Error has occured during parsing. '\
                                   'No files on disk have been modified. Exiting.'))
         return False, parsed_files, None
+    
     # NOTE: MERGE
     merge_success, merged_files = merge_all(parsed_files, st=st)
     if not merge_success:
         st.report_error(Exception('At least one Error occured during merging of files to be exported. '\
                                   'No files on disk have been modified. Exiting.'))
         return False, parsed_files, merged_files
+    
     # NOTE: WRITE
     write_success = write_all(merged_files, st=st)
     if not write_success:
         st.report_error(Exception('At least one Error occured during writing the parsed and merged files to disk. '\
                                   'Some files might have been written to disk and others might not. Exiting.'))
         return False, parsed_files, merged_files
+    
+    # NOTE: RETURN
     return success, parsed_files, merged_files
 
 
-# Cell nr. 185
+# Cell nr. 180
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False)
