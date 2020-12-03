@@ -560,8 +560,7 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
 
 # Cell nr. 175
 @register_command(cmd='export',
-                  args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False,
-                        'prepend': False, 'append': False})
+                  args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False})
 @traced
 def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     "This cell will be exported from the notebook to a .py file."
@@ -755,7 +754,6 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     zero_tuple = tuple([0])
     
     # NOTE: This will contain all the merges files
-    # TODO: make `code` a list of lists to allow for the appending / prepending mentioned below
     export_files = defaultdict(lambda: {'names': set(), 'code': [], 'orig': None, 'add_dunder_all':None})
     
     for file_info in parsed_files['files']:
@@ -786,7 +784,6 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                 for to in cell['export_to']:
                     state:dict = export_files[to]
                     if not cell['is_internal']: state['names'].update(cell['names'])
-                    # TODO: implement code appending / prepending here
                     state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['processed_source_code'])}")
             
             # NOTE: Handle a cell belonging to a scope and find the best match
@@ -810,7 +807,6 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                         state:dict = export_files[to]
                         if not cell['is_internal']: state['names'].update(cell['names'])
                         for _ in range(cell['export_to_scope']):
-                            # TODO: implement code appending / prepending here
                             state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['processed_source_code'])}")
             else:
                 cell['export_to_default'] += cell['export_to_scope']
@@ -825,7 +821,6 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                 state:dict = export_files[to]
                 if not cell['is_internal']: state['names'].update(cell['names'])
                 for _ in range(cell['export_to_default']):
-                    # TODO: implement code appending / prepending here
                     state['code'].append(f"{info_string}\n{relativify_imports(to, cell['processed_source_code'])}")
         # NOTE: Set 'add_dunder_all' and check for mismatches
         for k, v in scopes.items(): # for all scopes that this files exports to
