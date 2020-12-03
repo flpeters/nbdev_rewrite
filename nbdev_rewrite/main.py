@@ -755,6 +755,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     zero_tuple = tuple([0])
     
     # NOTE: This will contain all the merges files
+    # TODO: make `code` a list of lists to allow for the appending / prepending mentioned below
     export_files = defaultdict(lambda: {'names': set(), 'code': [], 'orig': None, 'add_dunder_all':None})
     
     for file_info in parsed_files['files']:
@@ -767,18 +768,20 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
         none_default    :bool = (default_scope is None)
         default_export  :Path = None if none_default else default_scope['target']
             
-        if not none_default: # Set the origin of an entire export file
+        if not none_default:
+            # NOTE: Set this notebooks default as the origin of one of the `export_files`.
             default_state:dict = export_files[default_export]
             if (default_state['orig'] is None): default_state['orig'] = rel_orig
             else: raise ValueError(f'Multiple files have {default_export} as the default export target. '\
                                    f'(old: {default_state["orig"]} | new: {rel_orig})')
                 
         for cell in file_info['cells']:
+            # NOTE: At this point, the `file_info` still contains all of the original cells of the notebook
             if not cell['export_to_py']: continue
             info_string = f"# {'Internal ' if cell['is_internal'] else ''}Cell nr. {cell['cell_nr']}"
-            info_string_src = f"{info_string}; Comes from '{rel_orig}'"
+            info_string_src = (info_string + f"; Comes from '{rel_orig}'")
             
-            # Handle a cell directly specifying its export target
+            # NOTE: Handle a cell directly specifying its export target
             if len(cell['export_to']) > 0:
                 for to in cell['export_to']:
                     state:dict = export_files[to]
@@ -786,7 +789,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                     # TODO: implement code appending / prepending here
                     state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['processed_source_code'])}")
             
-            # Handle a cell belonging to a scope and find the best match
+            # NOTE: Handle a cell belonging to a scope and find the best match
             if scopes_available:
                 if cell['export_to_scope'] > 0:
                     # Do scope matching
@@ -801,6 +804,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                     to:Path = scopes[best_fit]['target']
                     if (best_fit == zero_tuple) or (to == default_export):
                         cell['export_to_default'] += cell['export_to_scope']
+                        cell['export_to_scope'] = 0
                         pass
                     else:
                         state:dict = export_files[to]
@@ -808,9 +812,11 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                         for _ in range(cell['export_to_scope']):
                             # TODO: implement code appending / prepending here
                             state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['processed_source_code'])}")
-            else: cell['export_to_default'] += cell['export_to_scope']
+            else:
+                cell['export_to_default'] += cell['export_to_scope']
+                cell['export_to_scope'] = 0
             
-            # Handle a cell ignoring all scopes, or being in the default scope.
+            # NOTE: Handle a cell ignoring all scopes, or being in the default scope.
             if cell['export_to_default'] > 0:
                 if none_default:
                     raise ValueError(f'Export Target of cell {cell["cell_nr"]} is None. '\
@@ -837,6 +843,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                                        f"The value defined in cell nr {v['cell_info']['cell_nr']} in '{rel_orig}' "\
                                        f'does not match with a previous definition.'))
         # NOTE: The files can't yet be written, because there might be other notebooks exporting to the same files.
+        # NOTE: This is the end of the "for each file" loop
     return success, export_files
 
 
