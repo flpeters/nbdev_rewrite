@@ -59,8 +59,8 @@ def report_successful_export(parsed_files, merged_files):
     Title = f'{n_nbs} notebooks have been parsed, resulting in {n_py} python files.\n\n'
     
     # Information about which notebooks export to which python files
-    nb_info = f'The following {n_nbs} Notebook{"s"*int(n_nbs>1)} are exporting to these python files:\n'
-    nb_info += '-' * len(nb_info)
+    nb_info = f'The following {n_nbs} Notebook{"s"*int(n_nbs>1)} have been parsed:\n'
+    nb_info += '-' * (len(nb_info) - 1)
     n_out = nr_of_files_outputting_code = 0
     for file in parsed_files['files']:
         nb_info += f"\n{file['relative_origin']} ({len(file['cells'])} cells total)\n"
@@ -78,7 +78,7 @@ def report_successful_export(parsed_files, merged_files):
     
     # Information about how many Python files have been generated, and the number of cells exported to each
     py_info = f'The following {n_py} python files have been generated:\n'
-    py_info += '-' * len(py_info) + '\n'
+    py_info += '-' * (len(py_info) - 1) + '\n'
     for to, state in merged_files.items():
         n_cells = len(state['code'])
         py_info += f'---> {n_cells} cell{"s"*int(n_cells>1)} output to {relative_path(to)}\n'
@@ -546,10 +546,10 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     if not conv_success: return False
     if old_target is not None:
         if old_target['target'] != new_target:
-            # TODO: Improve this error message with information about which cells the culprits are.
             return st.report_error(ValueError(f"Overwriting an existing export target is not allowed."\
-                                   f"\n\twas: '{old_target['target']}'\n\tnew: '{new_target}'"))
-        else: pass # TODO: issue a warning in this case?
+                            f"\n\twas (cell {old_target['cell_info']['cell_nr']}): '{old_target['target']}'"\
+                            f"\n\tnew (cell {cell_info['cell_nr']}): '{new_target}'"))
+        else: pass # TODO: issue a warning in this case
     file_info['export_scopes'][scope] = {
         'target' : new_target,
         'add_dunder_all' : (not result['no_dunder_all']),
@@ -579,8 +579,8 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     if not conv_success: return False
     if export_target is not None:
         if is_set['ignore_scope']:
-            return st.report_error(ValueError("Setting 'ignore_scope' is not allowed when exporting to "\
-                                   f"a custom target using 'to' or 'to_path'."))
+            return st.report_error(ValueError("Setting 'ignore_scope' is not allowed when "\
+                                   f"exporting to a custom target using 'to' or 'to_path'."))
         cell_info['export_to'].append(export_target) # Set a new export target just for this cell.
     else:
         if result['ignore_scope']: cell_info['export_to_default'] += 1
