@@ -56,10 +56,11 @@ def report_successful_export(parsed_files, merged_files):
     "Report stats and compressed information about parsed and exported files."
     n_nbs = nr_of_notebooks_parsed = len(parsed_files['files'])
     n_py  = nr_of_output_py_files = len(merged_files)
-    Title = f'{n_nbs} notebooks have been parsed, resulting in {n_py} python files.\n\n'
+    Title = f'{n_nbs} notebook{"s"*int(n_nbs!=1)} {"have" if n_nbs!=1 else "has"} been parsed, '\
+            f'resulting in {n_py} python file{"s"*int(n_py!=1)}.\n\n'
     
     # Information about which notebooks export to which python files
-    nb_info = f'The following {n_nbs} Notebook{"s"*int(n_nbs>1)} have been parsed:\n'
+    nb_info = f'The following {n_nbs} notebook{"s"*int(n_nbs!=1)} have been parsed:\n'
     nb_info += '-' * (len(nb_info) - 1)
     n_out = nr_of_files_outputting_code = 0
     for file in parsed_files['files']:
@@ -73,15 +74,15 @@ def report_successful_export(parsed_files, merged_files):
         if n_exp > 0: n_out += 1
     
     
-    Middle = f'Of the {n_nbs} notebook{"s"*int(n_nbs>1)} parsed, '\
-             f'{n_out} {"are" if n_out > 1 else "is"} outputting code.'
+    Middle = f'Of the {n_nbs} notebook{"s"*int(n_nbs!=1)} parsed, '\
+             f'{n_out} {"are" if n_out!=1 else "is"} outputting code.'
     
     # Information about how many Python files have been generated, and the number of cells exported to each
-    py_info = f'The following {n_py} python files have been generated:\n'
+    py_info = f'The following {n_py} python file{"s"*int(n_py!=1)} {"have" if n_py!=1 else "has"} been generated:\n'
     py_info += '-' * (len(py_info) - 1) + '\n'
     for to, state in merged_files.items():
         n_cells = len(state['code'])
-        py_info += f'---> {n_cells} cell{"s"*int(n_cells>1)} output to {relative_path(to)}\n'
+        py_info += f'---> {n_cells} cell{"s"*int(n_cells!=1)} output to {relative_path(to)}\n'
         
     print(f'{Title}{nb_info}\n\n{Middle}\n\n{py_info}')
 
@@ -743,9 +744,6 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
 # Cell nr. 198
 @traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
-    # TODO: write one file at a time to disk, to the correct directory,
-    # initialize a python module, if it doesn't already exists,
-    # Handle mergers between multiple parsed_files. <-----------------
     success:bool = True
     config    = Config()
     lib_path  = config.lib_path
