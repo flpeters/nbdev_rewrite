@@ -24,15 +24,22 @@ or:
 
 `nbdev_rewrite` expects a certain directory structure.  
 The top level directory of your project should contain a `settings.ini`.  
-To convert notebooks to .py files, you only need to set `lib_name, lib_path, nbs_path, doc_path, version`.  
-You can copy the `settings.ini` in this repo to get started.  
+You can easily create this file by runnnig:
+```python
+from nbdev_rewrite.main import create_config
+create_config(lib_name='MY_LIB_NAME')
+```
+This function has many settings and is well documented.  
+After running it, verify that the `settings.ini` file was created in the correct directory, and double check that the `lib_name`, `lib_path`, `nbs_path`, and `doc_path` are set correctly.  
+You can also take a look at the `settings.ini` in this repo to get started.  
 
 All the notebooks you want to have converted need to be in the `nbs_path` folder.  
 The resulting .py files will be written to the `lib_path` folder.  
+`doc_path` exists for compatibility with the original nbdev project. It is where generated documentation is written to.  
 
 ### How to run the conversion
 
-After installing the `nbdev_rewrite` package via the steps above, you can copy and paste the following lines in your main jupyter notebook.  
+After installing the `nbdev_rewrite` package via the steps above, and having created a `settings.ini` file, you can copy and paste the following lines in your main jupyter notebook.  
 The package layout and names will change in the future, for now however this works.
 
 ```python
@@ -115,7 +122,7 @@ The following changes are minimally necessary:
 `# exporti` -> `# +export -internal`  
 `# default_exp my_module.main` -> `# +default_exp -to my_module.main`
 
-All `nbdev` style comment are ignored, and `nbdev` doesn't respond to `nbdev_rewrite` comments, so technically you can also use both at the same time. This is especially useful for the `nbdev` documentation feature, because that is not yet supported by `nbdev_rewrite`.
+All `nbdev` style comment are ignored, and `nbdev` doesn't respond to `nbdev_rewrite` comments, so technically you can also use both libraries at the same time. This might be useful for the `nbdev` documentation feature, because that is not yet supported by `nbdev_rewrite`. Please note that this has not been tested, and is not actively maintained.
 
 ## Messages from the Author
 
