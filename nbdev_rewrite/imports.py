@@ -13,6 +13,7 @@ from threading import Thread
 from queue import Queue
 from configparser import ConfigParser
 from pathlib import Path
+from collections import OrderedDict
 # from nbformat.sign import NotebookNotary
 # from base64 import b64decode,b64encode
 # from types import MethodType,FunctionType
@@ -40,24 +41,16 @@ def read_config_file(file, **kwargs):
 # Cell nr. 46; Comes from '00_export_v4.ipynb'
 _defaults = {"host": "github", "doc_host": "https://%(user)s.github.io", "doc_baseurl": "/%(lib_name)s/"}
 
-
-# Cell nr. 47; Comes from '00_export_v4.ipynb'
-def add_new_defaults(cfg, file):
+def _add_new_defaults(cfg, file):
+    "If an existing Config does not contain these values, add them, and save the config file.\n"\
+    "This is meant to be used in case new default values are added in later versions."
     for k,v in _defaults.items():
-        if cfg.get(k, None) is None: 
-            cfg[k] = v
-            save_config_file(file, cfg)
-
-
-# Cell nr. 48; Comes from '00_export_v4.ipynb'
-def _add_new_defaults(cfg, file, **kwargs):
-    for k,v in kwargs.items():
         if cfg.get(k, None) is None:
             cfg[k] = v
             save_config_file(file, cfg)
 
 
-# Cell nr. 49; Comes from '00_export_v4.ipynb'
+# Cell nr. 47; Comes from '00_export_v4.ipynb'
 @functools.lru_cache(maxsize=None)
 class Config:
     "Store the basic information for nbdev to work"
@@ -67,10 +60,6 @@ class Config:
         self.config_path,self.config_file = cfg_path,cfg_path/cfg_name
         assert self.config_file.exists(), f"Could not find {cfg_name}"
         self.d = read_config_file(self.config_file)['DEFAULT']
-        _add_new_defaults(self.d, self.config_file,
-                          host="github",
-                          doc_host="https://%(user)s.github.io",
-                          doc_baseurl="/%(lib_name)s/")
 
     def __getattr__(self,k):
         if k.endswith('_path'): return self._path_to(k)
@@ -92,15 +81,135 @@ class Config:
     def save(self): save_config_file(self.config_file,self.d)
 
 
-# Cell nr. 50; Comes from '00_export_v4.ipynb'
-def create_config(host, lib_name, user, path='.', cfg_name='settings.ini', branch='master',
-               git_url="https://github.com/%(user)s/%(lib_name)s/tree/%(branch)s/", custom_sidebar=False,
-               nbs_path='nbs', lib_path='%(lib_name)s', doc_path='docs', tst_flags='', version='0.0.1', **kwargs):
-    "Creates a new config file for `lib_name` and `user` and saves it."
-    g = locals()
-    config = {o:g[o] for o in 'host lib_name user branch git_url lib_path nbs_path doc_path tst_flags version custom_sidebar'.split()}
-    config = {**config, **kwargs}
-    save_config_file(Path(path)/cfg_name, config)
+# Cell nr. 48; Comes from '00_export_v4.ipynb'
+def create_config(lib_name,
+                  cfg_path='.', cfg_name='settings.ini',
+                  license=None,
+                  author=None, author_email=None, copyright=None,
+                  nbs_path='nbs',
+                  lib_path='%(lib_name)s', doc_path='docs',
+                  version='0.0.1', min_python='3.7',
+                  language='English', status=None,
+                  audience=None, title='%(lib_name)s',
+                  description=None, keywords=None,
+                  requirements=None, console_scripts=None, dep_links=None,
+                  git_user=None, host='github', branch='master',
+                  git_url='https://github.com/%(git_user)s/%(lib_name)s/tree/%(branch)s/',
+                  doc_host='https://%(git_user)s.github.io',
+                  doc_baseurl='/%(lib_name)s/',
+                  repo_name=None, company_name=None,
+                  **kwargs):
+    if git_user is None: host = branch = git_url = doc_host = doc_baseurl = None
+    else: user = git_user # NOTE: backwards compatibility
+    args = locals()
+    path = args.pop('cfg_path')
+    name = args.pop('cfg_name')
+    kwargs = args.pop('kwargs') # NOTE: locals() also contains `kwargs` as a key, so remove it
+    config = OrderedDict(filter(lambda x: x[1] is not None, # NOTE: Filter out None values
+                                sorted({**args, **kwargs}.items(),
+                                       key=lambda x:x[0]))) # NOTE: Sort by key
+    save_config_file(Path(path)/name, config)
+
+
+# Internal Cell nr. 49; Comes from '00_export_v4.ipynb'
+create_config.__doc__ = """
+Create a new config file and save it.
+
+Parameters
+----------
+`lib_name` : str
+    The name of the package that will be created
+
+`cfg_path` : str, optional
+    The path where to create the config file.
+`cfg_name` : str, optional
+    The name of the config file to be created.
+    
+`license` : {'apache2', }, optional
+    The license under which this project is published.
+`author` : str, optional
+    The name of the author of this project (probably you).
+`author_email` : str, optional
+    The authors email address.
+`copyright` : str, optional
+    The authors name, or a company name.
+
+`nbs_path` : str, optional
+    A path to a subdirectory relative to where the 'settings.ini' file is located.
+    All of the notebooks that you want to have processed need to be in this folder,
+    or in a subfolder.
+`lib_path` : str, optional
+    A path to a subdirectory relative to where the 'settings.ini' file is located.
+    This is the folder where all generated .py files will be stored,
+    and the name you use when importing the package.
+`doc_path` : str, optional
+    A path to a subdirectory relative to where the 'settings.ini' file is located.
+    Present for compatibility with the original 'nbdev' project. This folder is
+    where documentation generated from your notebooks in `nbs_path` is stored.
+
+`version` : str, optional
+    A version number in the '{major}.{minor}.{patch}' semantic versioning format.
+`min_python` : {..., '3.6', 3.7', '3.8', '3.9', ...}, optional
+    The minimum python version necessary to run your code [1].
+`language` : {'English', ...}, optional
+    The natural language used in your program [1].
+`status` : {'1', '2', '3', '4', '5', '6', '7'}, optional
+    The development status of your project [1].
+    The numbers 1-7 correspond to the following status respectively:
+    Planning, Pre-Alpha, Alpha, Beta, Production, Mature, Inactive
+`audience` : {'Developers', 'End Users/Desktop', 'Other Audience', ...}, optional
+    The intended audience of your project [1].
+`title` : str, optional
+    By default the same as your library name.
+    Currently only used by the original nbdev project.
+`description` : str, optional
+    A short, one sentence, description of your project.
+`keywords` : str, optional
+    Space separated keywords / tags that describe your project.
+    e.g. 'python jupyter notebook nbdev'.
+
+`requirements` : str, optional
+    Packages that are minimally required for your project to run.
+    Written in the same format as setuptools requirements [2].
+`console_scripts` : str, optional
+    Space separated list of key=value pairs.
+    The key is the name of the command,
+    and value is the python module and function that is supposed to be called.
+    Written in the same format as setuptools console-scripts [3].
+`dep_links` : str, optional
+    Currently not in use.
+    Written in the same format as setuptools dependency links.
+
+`git_user` : str, optional
+    Your git username.
+`host` : str, optional
+    The name of your git repo host.
+`branch` : str, optional
+    The name of the main git branch.
+`git_url` : str, optional
+    The git URL where your project lives.
+
+`doc_host` : str, optional
+    The URL where you have documentation hosted.
+`doc_baseurl` : str, optional
+    The URL path relative to the `doc_host`,
+    which points to where the docs for this project are stored.
+
+`repo_name` : str, optional
+    For enterprise git users.
+`company_name` : str, optional
+    For enterprise git users.
+
+Returns
+-------
+None
+
+See Also
+--------
+[1] https://pypi.org/classifiers/
+[2] https://packaging.python.org/discussions/install-requires-vs-requirements/
+[3] https://python-packaging.readthedocs.io/en/latest/command-line-scripts.html
+"""
 
 
 # Cell nr. 52; Comes from '00_export_v4.ipynb'
