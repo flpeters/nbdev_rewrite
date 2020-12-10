@@ -4,12 +4,12 @@
 __all__ = ['MODULE__ARGUMENT_PARSING__FLAG', 'parse_arguments', 'set_arg_parse_report_options']
 
 
-# Cell nr. 2; Comes from '00_export_v4.ipynb'
+# Cell nr. 2; Comes from 'notebooks/00_export_v4.ipynb'
 # This Flag allows anyone to know if this Module exists in their namespace
 MODULE__ARGUMENT_PARSING__FLAG = None
 
 
-# Internal Cell nr. 4; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 4; Comes from 'notebooks/00_export_v4.ipynb'
 arg_parse_REPORT_ERROR  :bool = True
 arg_parse_REPORT_WARNING:bool = True
 arg_parse_RAISE_ERROR  :bool  = False
@@ -17,7 +17,7 @@ arg_parse_RAISE_WARNING:bool  = False
 arg_parse_SILENT:bool = False
 
 
-# Cell nr. 5; Comes from '00_export_v4.ipynb'
+# Cell nr. 5; Comes from 'notebooks/00_export_v4.ipynb'
 def set_arg_parse_report_options(report_error:bool=True, report_warning:bool=True,
                                  raise_error:bool=False, raise_warning:bool=False,
                                  silent=False):
@@ -34,21 +34,21 @@ def set_arg_parse_report_options(report_error:bool=True, report_warning:bool=Tru
     arg_parse_SILENT = (silent or not (report_error and report_warning and raise_error and raise_warning))
 
 
-# Internal Cell nr. 6; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 6; Comes from 'notebooks/00_export_v4.ipynb'
 def report_error(err:Exception):
     if   arg_parse_SILENT: pass
     elif arg_parse_RAISE_ERROR : raise err
     elif arg_parse_REPORT_ERROR: print(f'[{err.__class__.__name__}]: {err}')
 
 
-# Internal Cell nr. 7; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 7; Comes from 'notebooks/00_export_v4.ipynb'
 def report_warning(warn:str):
     if   arg_parse_SILENT: pass
     elif arg_parse_RAISE_WARNING : raise Warning(warn)
     elif arg_parse_REPORT_WARNING: print(f'[Warning]: {warn}')
 
 
-# Internal Cell nr. 10; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 10; Comes from 'notebooks/00_export_v4.ipynb'
 def get_next_argument(args:list, name:str, cursor:int, suppress_error:bool=False) -> (bool, int, str):
     "Gets the next argument from the list.\nReturns success, the cursor, and the next argument"
     cursor_1 = cursor + 1
@@ -59,7 +59,7 @@ def get_next_argument(args:list, name:str, cursor:int, suppress_error:bool=False
         return False, cursor, ''
 
 
-# Internal Cell nr. 17; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 17; Comes from 'notebooks/00_export_v4.ipynb'
 def to_integer(value:str) -> (bool, int, float):
     "Try converting a str to int.\nReturn success, the value, and possibly a float remainder."
     try:
@@ -70,7 +70,7 @@ def to_integer(value:str) -> (bool, int, float):
     return True, int_value, remainder
 
 
-# Internal Cell nr. 19; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 19; Comes from 'notebooks/00_export_v4.ipynb'
 def to_float(value:str) -> (bool, float):
     "Try converting a str to float.\nReturn success, and the value."
     # TODO: check if 'inf', 'nan', ...?
@@ -78,7 +78,7 @@ def to_float(value:str) -> (bool, float):
     except: return False, value
 
 
-# Internal Cell nr. 21; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 21; Comes from 'notebooks/00_export_v4.ipynb'
 def to_bool(value:str) -> (bool, bool):
     """Try converting a str to bool.
     'True' and 'False' are recognized, otherwise the value is cast to float, and then to bool.
@@ -89,7 +89,7 @@ def to_bool(value:str) -> (bool, bool):
     except: return False, value
 
 
-# Internal Cell nr. 23; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 23; Comes from 'notebooks/00_export_v4.ipynb'
 def to_unbounded_array(args:list, cursor:int) -> (bool, int, list):
     """Consume any number of values until either reaching the end of args,
     or until finding a value starting with '-', denoting the beginning of a new argument.
@@ -107,14 +107,14 @@ def to_unbounded_array(args:list, cursor:int) -> (bool, int, list):
     return True, cursor, values
 
 
-# Internal Cell nr. 25; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 25; Comes from 'notebooks/00_export_v4.ipynb'
 def typify(type_or_value:object) -> (type, object):
     """Takes a type or a value.
     Returns a tuple of the type (or type of the value) and value (or None)"""
     return (type_or_value, None) if isinstance(type_or_value, type) else (type(type_or_value), type_or_value)
 
 
-# Cell nr. 28; Comes from '00_export_v4.ipynb'
+# Cell nr. 28; Comes from 'notebooks/00_export_v4.ipynb'
 def parse_arguments(command:dict, args:[str]) -> (bool, dict, dict):
     "Finds, casts, and returns values from command, in the given comment."    
     # TODO: check that the type of all commands is supported ahead of time?
@@ -154,7 +154,7 @@ def parse_arguments(command:dict, args:[str]) -> (bool, dict, dict):
     return success, result, is_set
 
 
-# Internal Cell nr. 29; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 29; Comes from 'notebooks/00_export_v4.ipynb'
 def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:object) -> bool:
     "Parse the input args based on arg_type, and set arg_name in result to that value."
     # NOTE: 'state' and 'result' are references not values, and modified from here.
@@ -241,7 +241,7 @@ def handle_one_argument(result:dict, state:dict, arg_type:type, arg_default:obje
     return success
 
 
-# Internal Cell nr. 30; Comes from '00_export_v4.ipynb'
+# Internal Cell nr. 30; Comes from 'notebooks/00_export_v4.ipynb'
 def check_is_set(result:dict, is_set:dict) -> bool:
     "Check if any required values (those without defaults), haven't been set yet"
     success = True
