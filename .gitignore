@@ -1,4 +1,4 @@
-test_settings.ini
+.gitattributes
 .gitconfig
 *.tgz
 .last_checked
