@@ -339,40 +339,25 @@ def info(context, node):
     return f'\nLocation: {context} | {lineno(node)}'
 
 
-# Internal Cell nr. 170
+# Internal Cell nr. 171
 def unwrap_attr(node:_ast.Attribute) -> str:
     "Joins a sequance of Attribute accesses together in a single string. e.g. numpy.array"
     if isinstance(node.value, _ast.Attribute): return '.'.join((unwrap_attr(node.value), node.attr))
     else: return '.'.join((node.value.id, node.attr))
 
 
-# Internal Cell nr. 171
-def update_from_all_(node, names, c):
-    "inplace, recursive update of set of names, by parsing the right side of a _all_ variable"
-    if   isinstance(node, _ast.Str): names.add(node.s)
-    elif isinstance(node, _ast.Name): names.add(node.id)
-    elif isinstance(node, _ast.Attribute): names.add(unwrap_attr(node))
-    elif isinstance(node, (_ast.List, _ast.Tuple, _ast.Set)):
-        for x in node.elts: update_from_all_(x, names, c)
-    elif isinstance(node, _ast.Subscript) :
-        raise SyntaxError(f'Subscript expression not allowed in _all_. {info(c, node)}')
-    elif isinstance(node, _ast.Starred):
-        raise SyntaxError(f'Starred expression *{node.value.id} not allowed in _all_. {info(c, node)}')
-    else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type. {info(c, node)}')
-
-
 # Internal Cell nr. 172
-def unwrap_assign(node, names, c):
+def unwrap_assign(node, names):
     "inplace, recursive update of list of names"
     if   isinstance(node, _ast.Name)      : names.append(node.id)
     elif isinstance(node, _ast.Starred)   : names.append(node.value.id)
     elif isinstance(node, _ast.Attribute) : names.append(unwrap_attr(node))
     elif isinstance(node, _ast.Subscript) : pass # e.g. a[0] = 1
     elif isinstance(node, (_ast.List, _ast.Tuple)):
-        for x in node.elts: unwrap_assign(x, names, c)
+        for x in node.elts: unwrap_assign(x, names)
     elif isinstance(node, list):
-        for x in node: unwrap_assign(x, names, c)
-    else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type. {info(c, node)}')
+        for x in node: unwrap_assign(x, names)
+    else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type.')
 
 
 # Internal Cell nr. 173
@@ -380,56 +365,52 @@ def not_private(name): return not (name.startswith('_') and (not name.startswith
 
 
 # Internal Cell nr. 174
-def add_names_A(node, names, c):
-    "Handle Assignments to variables"
-    tmp_names = list()
-    if   isinstance(node, _ast.Assign):
-        unwrap_assign(node.targets, tmp_names, c)
-    elif isinstance(node, _ast.AnnAssign):
-        unwrap_assign(node.target, tmp_names, c)
-    else: assert False, 'add_names_A only accepts _ast.Assign or _ast.AnnAssign'
-    for name in tmp_names:
-        if not_private(name): names.add(name)
-        # NOTE: special cases below can only use private variable names
-        elif name == '_all_': # NOTE: _all_ is a keyword reserved by nbdev.
-            if len(tmp_names) != 1:
-                raise SyntaxError(f'Reserved keyword "_all_" can only be used in simple assignments. {info(c, node)}')
-            update_from_all_(node.value, names, c)
-
-
-# Internal Cell nr. 175
 def resolve_decorator_name(node):
     if   isinstance(node, _ast.Name): return node.id
     elif isinstance(node, _ast.Call):
         if   isinstance(node.func, _ast.Name     ): return node.func.id
         elif isinstance(node.func, _ast.Attribute): return unwrap_attr(node.func)
     elif isinstance(node, _ast.Attribute): return unwrap_attr(node)
-    raise SyntaxError(f'Can\'t resolve decorator {node} to name, unknown type. {info(c, node)}')
+    raise SyntaxError(f'Can\'t resolve decorator {node} to name, unknown type.')
 
 def decorators(node): yield from (resolve_decorator_name(d) for d in node.decorator_list)
 
 
-# Internal Cell nr. 176
-def fastai_patch(cls, node, names, c): # TODO: Remove this function! 
-    if   isinstance(cls, _ast.Name):
-        if not_private(cls.id): names.add(f'{cls.id}.{node.name}')
-    elif isinstance(cls, (_ast.List, _ast.Tuple, _ast.Set)):
-            for x in cls.elts: fastai_patch(x, node, names, c)
-    else: raise SyntaxError(f'Can\'t resolve {cls} to @patch annotation, unknown type. {info(c, node)}')
+# Internal Cell nr. 175
+def update_from_all_(node, names):
+    "inplace, recursive update of set of names, by parsing the right side of a _all_ variable"
+    if   isinstance(node, _ast.Str): names.add(node.s)
+    elif isinstance(node, _ast.Name): names.add(node.id)
+    elif isinstance(node, _ast.Attribute): names.add(unwrap_attr(node))
+    elif isinstance(node, (_ast.List, _ast.Tuple, _ast.Set)):
+        for x in node.elts: update_from_all_(x, names)
+    elif isinstance(node, _ast.Subscript) :
+        raise SyntaxError(f'Subscript expression not allowed in _all_.')
+    elif isinstance(node, _ast.Starred):
+        raise SyntaxError(f'Starred expression *{node.value.id} not allowed in _all_.')
+    else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type.')
 
 
 # Internal Cell nr. 177
-# ignoring `@typedispatch` might not even be neccesarry,
-# since all names are added to a single set before being exported.
-def add_names_FC(node, names, c, fastai_decorators=True):
-    "Handle Function and Class Definitions"
-    if fastai_decorators and ('patch' in decorators(node)):
-        if not (len(node.args.args) >= 1): raise SyntaxError(f'fastai\'s @patch decorator requires at least one parameter. {info(c, node)}')
+# NOTE: These two functions are a mess, and a hacky way to do something specific to fastai.
+# TODO: Remove this function!!!!!!!
+def fastai_patch(cls, node, names):
+    if   isinstance(cls, _ast.Name):
+        if not_private(cls.id): names.add(f'{cls.id}.{node.name}')
+    elif isinstance(cls, (_ast.List, _ast.Tuple, _ast.Set)):
+            for x in cls.elts: fastai_patch(x, node, names)
+    else: raise SyntaxError(f'Can\'t resolve {cls} to @patch annotation, unknown type.')
+
+def handle_fastai_specific_logic(node, names):
+    if 'patch' in decorators(node):
+        if not (len(node.args.args) >= 1):
+            raise SyntaxError(f'fastai\'s @patch decorator requires at least one parameter.')
         cls = node.args.args[0].annotation
-        if cls is None: raise SyntaxError(f'fastai\'s @patch decorator requires a type annotation on the first parameter. {info(c, node)}')
-        fastai_patch(cls, node, names, c)
-    elif fastai_decorators and ('typedispatch' in decorators(node)): return # ignore @typedispatch
-    elif not_private(node.name): names.add(node.name)
+        if cls is None:
+            raise SyntaxError(f'fastai\'s @patch decorator requires a type annotation on the first parameter.')
+        fastai_patch(cls, node, names)
+        return False
+    return True
 
 
 # Cell nr. 178
@@ -438,16 +419,28 @@ def find_names(code:str, st:StackTrace) -> (bool, set):
     "Find all function, class and variable names in the given source code."
     try: tree = ast.parse(code).body
     except SyntaxError as e: return st.report_caught_syntax_error(e), None
-    context = Context() # TODO: remove soon, only temporary
     names = set()
     for node in tree:
-        if   isinstance(node, (_ast.Assign     , _ast.AnnAssign)): add_names_A (node, names, context)
-        elif isinstance(node, (_ast.FunctionDef, _ast.ClassDef )): add_names_FC(node, names, context)
-        else: pass
+        if isinstance(node, (_ast.FunctionDef, _ast.ClassDef )):
+            _continue = handle_fastai_specific_logic(node, names)
+            if _continue and not_private(node.name): names.add(node.name)
+        else:
+            is_assign, is_ann_assign = isinstance(node, _ast.Assign), isinstance(node, _ast.AnnAssign)
+            if is_assign or is_ann_assign:
+                tmp_names = list()
+                if   is_assign:     unwrap_assign(node.targets, tmp_names)
+                elif is_ann_assign: unwrap_assign(node.target , tmp_names)
+                for name in tmp_names:
+                    if not_private(name): names.add(name)
+                    # NOTE: special reserved var names can only use private variable names
+                    elif name == '_all_': # NOTE: _all_ is a keyword reserved by nbdev.
+                        if len(tmp_names) != 1:
+                            raise SyntaxError(f'Reserved keyword "_all_" can only be used in simple assignments.')
+                        update_from_all_(node.value, names)
     return True, names
 
 
-# Internal Cell nr. 184
+# Internal Cell nr. 186
 def make_import_relative(p_from:Path, m_to:str)->str:
     "Convert a module `m_to` to a name relative to `p_from`."
     mods = m_to.split('.')
@@ -460,7 +453,7 @@ def make_import_relative(p_from:Path, m_to:str)->str:
     return '.' * len(splits) + '.'.join(mods)
 
 
-# Internal Cell nr. 188
+# Internal Cell nr. 190
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -474,7 +467,7 @@ re_import = ReLibName(fr"""
     """, re.VERBOSE | re.MULTILINE)
 
 
-# Cell nr. 189
+# Cell nr. 191
 def relativify_imports(origin:Path, code:str)->str:
     "Transform an absolute 'from LIB_NAME import module' into a relative import of 'module' wrt the library."
     def repl(match):
@@ -483,7 +476,7 @@ def relativify_imports(origin:Path, code:str)->str:
     return re_import.re.sub(repl,code)
 
 
-# Cell nr. 192
+# Cell nr. 194
 def init_lib():
     "initialize the module folder, if it's not initialized already"
     C = Config()
@@ -495,7 +488,7 @@ def init_lib():
 init_lib()
 
 
-# Internal Cell nr. 198
+# Internal Cell nr. 200
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -503,7 +496,7 @@ module = fr'(?:{identifier}\.)*{identifier}'
 module
 
 
-# Internal Cell nr. 199
+# Internal Cell nr. 201
 # https://docs.python.org/3/library/re.html
 re_match_module = re.compile(fr"""
         ^              # start of the string
@@ -512,7 +505,7 @@ re_match_module = re.compile(fr"""
         """, re.VERBOSE)
 
 
-# Cell nr. 201
+# Cell nr. 203
 @Traced
 def module_to_path(m:str, st:StackTrace)->(bool, Path):
     "Turn a module name into a path such that the exported file can be imported from the library "\
@@ -527,20 +520,20 @@ def module_to_path(m:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"'{m}' is not a valid module name.")), None
 
 
-# Internal Cell nr. 209
+# Internal Cell nr. 211
 def commonpath(*paths)->Path:
     "Given a sequence of path names, returns the longest common sub-path."
     return Path(os.path.commonpath(paths))
 
 
-# Internal Cell nr. 211
+# Internal Cell nr. 213
 def in_directory(p:Path, d:Path)->bool:
     "Tests if `p` is pointing to something in the directory `d`.\n"\
     "Expects both `p` and `d` to be fully resolved and absolute paths."
     return p.as_posix().startswith(d.as_posix())
 
 
-# Cell nr. 214
+# Cell nr. 216
 @Traced
 def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
@@ -558,7 +551,7 @@ def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"Expected '.py' file ending, but got '{p.suffix}'. ('{s}')")), None
 
 
-# Cell nr. 224
+# Cell nr. 226
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -569,12 +562,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 225
+# Cell nr. 227
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 227
+# Cell nr. 229
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'no_dunder_all': False, 'scoped': False})
 @Traced
@@ -605,7 +598,7 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 229
+# Cell nr. 231
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False, 'from_string':False})
 @Traced
@@ -638,7 +631,7 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 239
+# Cell nr. 241
 _reserved_dirs = (Config().lib_path, Config().doc_path)
 def crawl_directory(path:Path, recurse:bool=True) -> list:
     "Crawl the `path` directory for a list of .ipynb files."
@@ -660,20 +653,20 @@ def crawl_directory(path:Path, recurse:bool=True) -> list:
                 else: continue
 
 
-# Cell nr. 240
+# Cell nr. 242
 def read_nb(fname:Path) -> dict:
     "Read the `fname` notebook."
     with open(Path(fname),'r', encoding='utf8') as f: return dict(nbformat.reads(f.read(), as_version=4))
 
 
-# Cell nr. 241
+# Cell nr. 243
 @prefetch(max_prefetch=-1) # NOTE: max_prefetch <= 0 means the queue size is infinite
 def async_load_notebooks(path:Path=Config().nbs_path, recurse:bool=True) -> (Path, dict):
     "Crawl for notebooks in the `path` directory, and load in a background thread."
     for file_path in crawl_directory(path, recurse): yield (file_path, read_nb(file_path))
 
 
-# Internal Cell nr. 247
+# Internal Cell nr. 249
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -683,7 +676,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 249
+# Cell nr. 251
 @Traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
@@ -769,7 +762,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 250
+# Cell nr. 252
 @Traced
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -791,7 +784,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     return success, parsed_files
 
 
-# Cell nr. 252
+# Cell nr. 254
 @Traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     success:bool = True
@@ -894,7 +887,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, export_files
 
 
-# Cell nr. 259
+# Cell nr. 261
 @Traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -923,7 +916,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 260
+# Cell nr. 262
 @Traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     # print(dict(export_files))
@@ -934,7 +927,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 262
+# Cell nr. 264
 @Traced
 def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     "Load, Parse, Merge, and Write .ipynb files to .py files."
@@ -974,7 +967,7 @@ def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=
     return success, parsed_files, merged_files
 
 
-# Cell nr. 264
+# Cell nr. 266
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False,
                         report_command_found=False,
