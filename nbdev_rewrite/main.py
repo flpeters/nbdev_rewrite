@@ -573,11 +573,11 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     cell_info['export_to_py'] = True # Using this command implicitly means to export this cell
     if result['from_string']:
         # TODO: unwrap cell content
-        # from_string_cell(cell_info['original_source_code'])
+        # from_string_cell(cell_info['processed_source_code'])
         pass
     is_internal = cell_info['is_internal'] = result['internal']
     if is_internal: pass # no contained names will be added to __all__ for importing
-    else: success, cell_info['names'] = find_names(cell_info['original_source_code'])
+    else: success, cell_info['names'] = find_names(cell_info['processed_source_code'])
     conv_success, export_target = True, None
     if is_set['to'     ]: conv_success, export_target = module_to_path (result['to'], st=st)
     if is_set['to_path']: conv_success, export_target = make_valid_path(result['to_path'], st=st)
@@ -695,7 +695,7 @@ class FileInfo(DictLikeAccess, DictLikeRepr):
 @Traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
-    pure_comments_only = True
+    PURE_COMMENTS_ONLY = True
     nb_version:(int, int) = (file['nbformat'], file['nbformat_minor'])
     metadata  :dict       =  file['metadata']
     
@@ -712,50 +712,41 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     for i, cell in enumerate(file['cells']):
         cell_type   = cell['cell_type']
         cell_source = cell['source']
-        cell_info = CellInfo(cell_nr = i,
-                             cell_type = cell_type,
+        cell_info = CellInfo(cell_nr     = i,
+                             cell_type   = cell_type,
                              cell_source = cell_source,
-                             scope = tuple(scope_count))
-#         cell_info = {
-#             'cell_nr' : i,
-#             'cell_type' : cell_type,
-#             'original_source_code' : cell_source,
-#             'processed_source_code': cell_source,
-#             'scope' : tuple(scope_count),
-#             'export_to_py' : False,
-#             'export_to_scope' : 0,
-#             'export_to_default' : 0,
-#             'is_internal' : None,
-#             'export_to' : [],
-#             'names' : None,
-#             'comments' : []
-#         }
+                             scope       = tuple(scope_count))
         if cell_type == 'code':
             st.ext(cellno = i)
-            comments_to_remove = []
-            for comment, (lineno, charno) in iter_comments(cell_source, pure_comments_only, line_limit=None):
+            comments = []
+            for comment, (lineno, charno) in iter_comments(cell_source, PURE_COMMENTS_ONLY, line_limit=None):
                 st.ext(lineno = lineno + 1) # zero counting offset
                 st.ext(excerpt = comment)
                 parsing_success, cmd, result, is_set = parse_comment(all_commands,comment,st=st)
-                if not parsing_success: continue
-                # TODO: cound nr of found cells
-                if main_REPORT_COMMAND_FOUND:
-                    print(f'Found: {cmd} @ ({i}, {lineno}, {charno}) with args: {result}')
-                if cmd in cmd2func:
-                    cmd_success = cmd2func[cmd](file_info, cell_info, result, is_set, st=st)
-                    if not cmd_success: return False, file_info # TODO: Stop at first error or continue?
-                else: raise ValueError(f"The command '{cmd}' in cell number {i} is recognized, "\
+                if parsing_success:
+                    if cmd in cmd2func:
+                        if main_REPORT_COMMAND_FOUND:
+                            print(f'Found: {cmd} @ ({i}, {lineno}, {charno}) with args: {result}')
+                        # TODO: store 'comment' as well?
+                        comments.append((lineno, charno, cmd, result, is_set))
+                    else: raise ValueError(f"The command '{cmd}' in cell number {i} is recognized, "\
                                         "but is missing a corresponding action mapping in cmd2func.")
-                cell_info['comments'].append(comment)
-                comments_to_remove.append((lineno, charno))
-            if len(comments_to_remove) > 0:
-                lines = cell_source.splitlines()
-                if pure_comments_only:
-                    for lineno, charno in comments_to_remove[::-1]: lines.pop(lineno)
-                else:
-                    for lineno, charno in comments_to_remove[::-1]: lines[lineno] = lines[lineno][:charno]
-                cell_info['processed_source_code'] = '\n'.join(lines)
-            
+                else: pass # NOTE: This happens all the time, and just means this is not a command comment.
+            if len(comments) == 0: continue # NOTE: skip to handling next cell
+            cell_info['comments'] = comments
+            # TODO: count nr of found cells for run statistics
+            # NOTE: Remove command comments from source code
+            lines = cell_source.splitlines()
+            if PURE_COMMENTS_ONLY:
+                for lineno, charno, *_ in comments[::-1]: lines.pop(lineno)
+            else:
+                for lineno, charno, *_ in comments[::-1]: lines[lineno] = lines[lineno][:charno]
+            clean_source_code = '\n'.join(lines)
+            cell_info['processed_source_code'] = '\n'.join(lines)
+            # NOTE: Run commands
+            for _, _, cmd, result, is_set in comments:
+                cmd_success = cmd2func[cmd](file_info, cell_info, result, is_set, st=st)
+                if not cmd_success: return False, file_info # NOTE: Stop at first error in a file.
         elif cell_type == 'markdown':
             res = re_match_heading.search(cell_source)
             if not (res is None): # this cell contains a heading
