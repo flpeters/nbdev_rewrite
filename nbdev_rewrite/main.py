@@ -573,8 +573,8 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     cell_info['export_to_py'] = True # Using this command implicitly means to export this cell
     if result['from_string']:
         # TODO: unwrap cell content
-        # from_string_cell(cell_info['processed_source_code'])
-        pass
+        convert_success, cell_info['processed_source_code'] = from_string_cell(cell_info['processed_source_code'])
+        if not convert_success: return False
     is_internal = cell_info['is_internal'] = result['internal']
     if is_internal: pass # no contained names will be added to __all__ for importing
     else: success, cell_info['names'] = find_names(cell_info['processed_source_code'])
@@ -677,7 +677,7 @@ class CellInfo(DictLikeAccess, DictLikeRepr):
         self.comments              = list()
 
 
-# Cell nr. 254
+# Cell nr. 253
 class FileInfo(DictLikeAccess, DictLikeRepr):
     __slots__ = ('origin_file', 'relative_origin', 'nb_version',
                  'export_scopes', 'cells', 'export_units')
@@ -691,25 +691,21 @@ class FileInfo(DictLikeAccess, DictLikeRepr):
         self.export_units    = list()       if (export_units  is None) else export_units
 
 
-# Cell nr. 255
+# Cell nr. 254
 @Traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
     PURE_COMMENTS_ONLY = True
     nb_version:(int, int) = (file['nbformat'], file['nbformat_minor'])
     metadata  :dict       =  file['metadata']
-    
     file_info = FileInfo(origin_file = file_path,
                          nb_version  = nb_version)
-    
+    st.ext(file=file_info['relative_origin'])
+    cells:list = file_info['cells']
     scope_count :[int] = [0]
     scope_level :int   = 0
-    
-    cells:list = file_info['cells']
-    
-    st.ext(file=file_info['relative_origin'])
-    
     for i, cell in enumerate(file['cells']):
+        st.ext(cellno = i)
         cell_type   = cell['cell_type']
         cell_source = cell['source']
         cell_info = CellInfo(cell_nr     = i,
@@ -717,22 +713,22 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
                              cell_source = cell_source,
                              scope       = tuple(scope_count))
         if cell_type == 'code':
-            st.ext(cellno = i)
+            # NOTE: Search for command comments
             comments = []
             for comment, (lineno, charno) in iter_comments(cell_source, PURE_COMMENTS_ONLY, line_limit=None):
                 st.ext(lineno = lineno + 1) # zero counting offset
-                st.ext(excerpt = comment)
                 parsing_success, cmd, result, is_set = parse_comment(all_commands,comment,st=st)
                 if parsing_success:
-                    if cmd in cmd2func:
-                        if main_REPORT_COMMAND_FOUND:
-                            print(f'Found: {cmd} @ ({i}, {lineno}, {charno}) with args: {result}')
-                        # TODO: store 'comment' as well?
-                        comments.append((lineno, charno, cmd, result, is_set))
-                    else: raise ValueError(f"The command '{cmd}' in cell number {i} is recognized, "\
-                                        "but is missing a corresponding action mapping in cmd2func.")
+                    if not (cmd in cmd2func):
+                        return st.report_error(ValueError(f"The command '{cmd}' is recognized, but does not "\
+                                        "map to a corresponding action in 'cmd2func'."),
+                                        excerpt=comment, span=(charno, len(cmd)+3)), None
+                    if main_REPORT_COMMAND_FOUND:
+                        print(f'Found: {cmd} @ ({i}, {lineno}, {charno}) with args: {result}')
+                    # TODO: store 'comment' as well?
+                    comments.append((lineno, charno, cmd, result, is_set))
                 else: pass # NOTE: This happens all the time, and just means this is not a command comment.
-            if len(comments) == 0: continue # NOTE: skip to handling next cell
+            if len(comments) == 0: continue
             cell_info['comments'] = comments
             # TODO: count nr of found cells for run statistics
             # NOTE: Remove command comments from source code
@@ -742,11 +738,11 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
             else:
                 for lineno, charno, *_ in comments[::-1]: lines[lineno] = lines[lineno][:charno]
             clean_source_code = '\n'.join(lines)
-            cell_info['processed_source_code'] = '\n'.join(lines)
+            cell_info['processed_source_code'] = clean_source_code
             # NOTE: Run commands
             for _, _, cmd, result, is_set in comments:
                 cmd_success = cmd2func[cmd](file_info, cell_info, result, is_set, st=st)
-                if not cmd_success: return False, file_info # NOTE: Stop at first error in a file.
+                if not cmd_success: return False, file_info # NOTE: Return on first error in a file.
         elif cell_type == 'markdown':
             res = re_match_heading.search(cell_source)
             if not (res is None): # this cell contains a heading
@@ -766,7 +762,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 256
+# Cell nr. 255
 @Traced
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -788,7 +784,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     return success, parsed_files
 
 
-# Cell nr. 258
+# Cell nr. 257
 @Traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     success:bool = True
@@ -891,7 +887,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, export_files
 
 
-# Cell nr. 265
+# Cell nr. 264
 @Traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -920,7 +916,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 266
+# Cell nr. 265
 @Traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     # print(dict(export_files))
@@ -931,7 +927,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 268
+# Cell nr. 267
 @Traced
 def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     "Load, Parse, Merge, and Write .ipynb files to .py files."
@@ -971,7 +967,7 @@ def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=
     return success, parsed_files, merged_files
 
 
-# Cell nr. 270
+# Cell nr. 269
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False,
                         report_command_found=False,

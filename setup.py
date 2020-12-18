@@ -223,6 +223,4 @@ setup_call = {**metadata, **setup_kwargs}
 
 
 # Cell nr. 29; Comes from 'notebooks/00_export_v4.ipynb'
-r"""
 setup(**setup_call)
-""";
