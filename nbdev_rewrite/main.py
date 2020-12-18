@@ -317,36 +317,21 @@ def from_string_cell(source:str, st:StackTrace) -> (bool, str):
 
 
 # Internal Cell nr. 166
-class Context:
-    def __init__(self, cell_nr=None, export_nr=None):
-        self.cell_nr   = cell_nr
-        self.export_nr = export_nr
-    def __repr__(self):
-        return f'cell_nr: {self.cell_nr}, export_nr: {self.export_nr}'
-
-
-# Internal Cell nr. 167
 def lineno(node):
     "Format a string containing location information on ast nodes. Used for Debugging only."
-    if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
-        return f'line_nr: {node.lineno} col_offset: {node.col_offset}'
-    else: return ''
+    lineno     = getattr(node, 'lineno', None)
+    col_offset = getattr(node, 'col_offset', None)
+    return lineno, col_offset
 
 
 # Internal Cell nr. 168
-def info(context, node):
-    "Format a string with available information on a ast node. Used for Debugging only."
-    return f'\nLocation: {context} | {lineno(node)}'
-
-
-# Internal Cell nr. 171
 def unwrap_attr(node:_ast.Attribute) -> str:
     "Joins a sequance of Attribute accesses together in a single string. e.g. numpy.array"
     if isinstance(node.value, _ast.Attribute): return '.'.join((unwrap_attr(node.value), node.attr))
     else: return '.'.join((node.value.id, node.attr))
 
 
-# Internal Cell nr. 172
+# Internal Cell nr. 169
 def unwrap_assign(node, names):
     "inplace, recursive update of list of names"
     if   isinstance(node, _ast.Name)      : names.append(node.id)
@@ -360,11 +345,11 @@ def unwrap_assign(node, names):
     else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type.')
 
 
-# Internal Cell nr. 173
+# Internal Cell nr. 170
 def not_private(name): return not (name.startswith('_') and (not name.startswith('__')))
 
 
-# Internal Cell nr. 174
+# Internal Cell nr. 171
 def resolve_decorator_name(node):
     if   isinstance(node, _ast.Name): return node.id
     elif isinstance(node, _ast.Call):
@@ -376,7 +361,7 @@ def resolve_decorator_name(node):
 def decorators(node): yield from (resolve_decorator_name(d) for d in node.decorator_list)
 
 
-# Internal Cell nr. 175
+# Internal Cell nr. 172
 def update_from_all_(node, names):
     "inplace, recursive update of set of names, by parsing the right side of a _all_ variable"
     if   isinstance(node, _ast.Str): names.add(node.s)
@@ -391,29 +376,7 @@ def update_from_all_(node, names):
     else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type.')
 
 
-# Internal Cell nr. 177
-# NOTE: These two functions are a mess, and a hacky way to do something specific to fastai.
-# TODO: Remove this function!!!!!!!
-def fastai_patch(cls, node, names):
-    if   isinstance(cls, _ast.Name):
-        if not_private(cls.id): names.add(f'{cls.id}.{node.name}')
-    elif isinstance(cls, (_ast.List, _ast.Tuple, _ast.Set)):
-            for x in cls.elts: fastai_patch(x, node, names)
-    else: raise SyntaxError(f'Can\'t resolve {cls} to @patch annotation, unknown type.')
-
-def handle_fastai_specific_logic(node, names):
-    if 'patch' in decorators(node):
-        if not (len(node.args.args) >= 1):
-            raise SyntaxError(f'fastai\'s @patch decorator requires at least one parameter.')
-        cls = node.args.args[0].annotation
-        if cls is None:
-            raise SyntaxError(f'fastai\'s @patch decorator requires a type annotation on the first parameter.')
-        fastai_patch(cls, node, names)
-        return False
-    return True
-
-
-# Cell nr. 178
+# Cell nr. 175
 @Traced
 def find_names(code:str, st:StackTrace) -> (bool, set):
     "Find all function, class and variable names in the given source code."
@@ -422,8 +385,7 @@ def find_names(code:str, st:StackTrace) -> (bool, set):
     names = set()
     for node in tree:
         if isinstance(node, (_ast.FunctionDef, _ast.ClassDef )):
-            _continue = handle_fastai_specific_logic(node, names)
-            if _continue and not_private(node.name): names.add(node.name)
+            if not_private(node.name): names.add(node.name)
         else:
             is_assign, is_ann_assign = isinstance(node, _ast.Assign), isinstance(node, _ast.AnnAssign)
             if is_assign or is_ann_assign:
@@ -440,7 +402,7 @@ def find_names(code:str, st:StackTrace) -> (bool, set):
     return True, names
 
 
-# Internal Cell nr. 186
+# Internal Cell nr. 183
 def make_import_relative(p_from:Path, m_to:str)->str:
     "Convert a module `m_to` to a name relative to `p_from`."
     mods = m_to.split('.')
@@ -453,7 +415,7 @@ def make_import_relative(p_from:Path, m_to:str)->str:
     return '.' * len(splits) + '.'.join(mods)
 
 
-# Internal Cell nr. 190
+# Internal Cell nr. 187
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -467,7 +429,7 @@ re_import = ReLibName(fr"""
     """, re.VERBOSE | re.MULTILINE)
 
 
-# Cell nr. 191
+# Cell nr. 188
 def relativify_imports(origin:Path, code:str)->str:
     "Transform an absolute 'from LIB_NAME import module' into a relative import of 'module' wrt the library."
     def repl(match):
@@ -476,7 +438,7 @@ def relativify_imports(origin:Path, code:str)->str:
     return re_import.re.sub(repl,code)
 
 
-# Cell nr. 194
+# Cell nr. 191
 def init_lib():
     "initialize the module folder, if it's not initialized already"
     C = Config()
@@ -488,7 +450,7 @@ def init_lib():
 init_lib()
 
 
-# Internal Cell nr. 200
+# Internal Cell nr. 197
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -496,7 +458,7 @@ module = fr'(?:{identifier}\.)*{identifier}'
 module
 
 
-# Internal Cell nr. 201
+# Internal Cell nr. 198
 # https://docs.python.org/3/library/re.html
 re_match_module = re.compile(fr"""
         ^              # start of the string
@@ -505,7 +467,7 @@ re_match_module = re.compile(fr"""
         """, re.VERBOSE)
 
 
-# Cell nr. 203
+# Cell nr. 200
 @Traced
 def module_to_path(m:str, st:StackTrace)->(bool, Path):
     "Turn a module name into a path such that the exported file can be imported from the library "\
@@ -520,20 +482,20 @@ def module_to_path(m:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"'{m}' is not a valid module name.")), None
 
 
-# Internal Cell nr. 211
+# Internal Cell nr. 208
 def commonpath(*paths)->Path:
     "Given a sequence of path names, returns the longest common sub-path."
     return Path(os.path.commonpath(paths))
 
 
-# Internal Cell nr. 213
+# Internal Cell nr. 210
 def in_directory(p:Path, d:Path)->bool:
     "Tests if `p` is pointing to something in the directory `d`.\n"\
     "Expects both `p` and `d` to be fully resolved and absolute paths."
     return p.as_posix().startswith(d.as_posix())
 
 
-# Cell nr. 216
+# Cell nr. 213
 @Traced
 def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
@@ -551,7 +513,7 @@ def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"Expected '.py' file ending, but got '{p.suffix}'. ('{s}')")), None
 
 
-# Cell nr. 226
+# Cell nr. 223
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -562,12 +524,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 227
+# Cell nr. 224
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 229
+# Cell nr. 226
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'no_dunder_all': False, 'scoped': False})
 @Traced
@@ -598,7 +560,7 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 231
+# Cell nr. 228
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False, 'from_string':False})
 @Traced
@@ -631,7 +593,7 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 241
+# Cell nr. 238
 _reserved_dirs = (Config().lib_path, Config().doc_path)
 def crawl_directory(path:Path, recurse:bool=True) -> list:
     "Crawl the `path` directory for a list of .ipynb files."
@@ -653,20 +615,20 @@ def crawl_directory(path:Path, recurse:bool=True) -> list:
                 else: continue
 
 
-# Cell nr. 242
+# Cell nr. 239
 def read_nb(fname:Path) -> dict:
     "Read the `fname` notebook."
     with open(Path(fname),'r', encoding='utf8') as f: return dict(nbformat.reads(f.read(), as_version=4))
 
 
-# Cell nr. 243
+# Cell nr. 240
 @prefetch(max_prefetch=-1) # NOTE: max_prefetch <= 0 means the queue size is infinite
 def async_load_notebooks(path:Path=Config().nbs_path, recurse:bool=True) -> (Path, dict):
     "Crawl for notebooks in the `path` directory, and load in a background thread."
     for file_path in crawl_directory(path, recurse): yield (file_path, read_nb(file_path))
 
 
-# Internal Cell nr. 249
+# Internal Cell nr. 246
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -676,7 +638,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 251
+# Cell nr. 248
 @Traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
@@ -762,7 +724,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 252
+# Cell nr. 249
 @Traced
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -784,7 +746,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     return success, parsed_files
 
 
-# Cell nr. 254
+# Cell nr. 251
 @Traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     success:bool = True
@@ -887,7 +849,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, export_files
 
 
-# Cell nr. 261
+# Cell nr. 258
 @Traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -916,7 +878,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 262
+# Cell nr. 259
 @Traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     # print(dict(export_files))
@@ -927,7 +889,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 264
+# Cell nr. 261
 @Traced
 def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     "Load, Parse, Merge, and Write .ipynb files to .py files."
@@ -967,7 +929,7 @@ def main(nbs_path:str=None, lib_path:str=None, recurse:bool=True, st:StackTrace=
     return success, parsed_files, merged_files
 
 
-# Cell nr. 266
+# Cell nr. 263
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False,
                         report_command_found=False,
