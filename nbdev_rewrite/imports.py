@@ -23,7 +23,16 @@ from collections import OrderedDict
 def test_eq(a,b): assert a==b, f'{a}, {b}'
 
 
-# Cell nr. 80; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 79; Comes from 'notebooks/00_export_v4.ipynb'
+def relative_path(file_path:Path, relative_to:Path) -> str:
+    "Take a file path and a directory, and return the file path relative to the directory.\n" \
+    "If a relative path is given as an input, then it will first be resolved using the current working directory."
+    file_path   = Path(file_path).absolute().resolve()
+    relative_to = Path(relative_to).absolute().resolve()
+    return os.path.relpath(file_path, relative_to).replace('\\', '/')
+
+
+# Cell nr. 82; Comes from 'notebooks/00_export_v4.ipynb'
 def save_config_file(file, d, **kwargs):
     "Write settings dict to a new config file, or overwrite the existing one."
     config = ConfigParser(**kwargs)
@@ -31,14 +40,14 @@ def save_config_file(file, d, **kwargs):
     config.write(open(file, 'w'))
 
 
-# Cell nr. 81; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 83; Comes from 'notebooks/00_export_v4.ipynb'
 def read_config_file(file, **kwargs):
     config = ConfigParser(**kwargs)
     config.read(file)
     return config
 
 
-# Cell nr. 82; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 84; Comes from 'notebooks/00_export_v4.ipynb'
 _defaults = {"host": "github", "doc_host": "https://%(user)s.github.io", "doc_baseurl": "/%(lib_name)s/"}
 
 def _add_new_defaults(cfg, file):
@@ -50,15 +59,17 @@ def _add_new_defaults(cfg, file):
             save_config_file(file, cfg)
 
 
-# Cell nr. 83; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 85; Comes from 'notebooks/00_export_v4.ipynb'
 @functools.lru_cache(maxsize=None)
 class Config:
     "Store the basic information for nbdev to work"
     def __init__(self, cfg_name='settings.ini'):
         cfg_path = Path.cwd().absolute().resolve()
         while cfg_path != cfg_path.parent and not (cfg_path/cfg_name).exists(): cfg_path = cfg_path.parent
-        self.config_path,self.config_file = cfg_path,cfg_path/cfg_name
-        assert self.config_file.exists(), f"Could not find {cfg_name}"
+        self.config_path = self.proj_path = cfg_path
+        self.config_file = cfg_path/cfg_name
+        assert self.config_file.exists(), f"Could not find '{cfg_name}' in current directory, or its parents. "\
+                                           "Create a config file with `create_config()`"
         self.d = read_config_file(self.config_file)['DEFAULT']
 
     def __getattr__(self,k):
@@ -81,7 +92,7 @@ class Config:
     def save(self): save_config_file(self.config_file,self.d)
 
 
-# Cell nr. 84; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 86; Comes from 'notebooks/00_export_v4.ipynb'
 def create_config(lib_name,
                   cfg_path='.', cfg_name='settings.ini',
                   license=None,
@@ -113,7 +124,7 @@ def create_config(lib_name,
     save_config_file(Path(path)/name, config)
 
 
-# Internal Cell nr. 85; Comes from 'notebooks/00_export_v4.ipynb'
+# Internal Cell nr. 88; Comes from 'notebooks/00_export_v4.ipynb'
 create_config.__doc__ = """
 Create a new config file and save it.
 
@@ -221,7 +232,7 @@ See Also
 """
 
 
-# Cell nr. 88; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 91; Comes from 'notebooks/00_export_v4.ipynb'
 def in_ipython():
     "Check if the code is running in the ipython environment (jupyter including)"
     program_name = os.path.basename(os.getenv('_', ''))
@@ -233,7 +244,7 @@ def in_ipython():
 IN_IPYTHON = in_ipython()
 
 
-# Cell nr. 89; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 92; Comes from 'notebooks/00_export_v4.ipynb'
 def in_colab():
     "Check if the code is running in Google Colaboratory"
     try:
@@ -243,7 +254,7 @@ def in_colab():
 IN_COLAB = in_colab()
 
 
-# Cell nr. 90; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 93; Comes from 'notebooks/00_export_v4.ipynb'
 def in_notebook():
     "Check if the code is running in a jupyter notebook"
     if in_colab(): return True
@@ -256,14 +267,14 @@ def in_notebook():
 IN_NOTEBOOK = in_notebook()
 
 
-# Cell nr. 92; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 95; Comes from 'notebooks/00_export_v4.ipynb'
 def num_cpus():
     "Get number of cpus"
     try:                   return len(os.sched_getaffinity(0)) # NOTE: not available on all platforms
     except AttributeError: return os.cpu_count()
 
 
-# Cell nr. 93; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 96; Comes from 'notebooks/00_export_v4.ipynb'
 class ProcessPoolExecutor(concurrent.futures.ProcessPoolExecutor):
     "Like `concurrent.futures.ProcessPoolExecutor` but handles 0 `max_workers`."
     def __init__(self, max_workers=None, on_exc=print, **kwargs):
@@ -279,7 +290,7 @@ class ProcessPoolExecutor(concurrent.futures.ProcessPoolExecutor):
         except Exception as e: self.on_exc(e)
 
 
-# Cell nr. 94; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 97; Comes from 'notebooks/00_export_v4.ipynb'
 def parallel(f, items, *args, n_workers=None, **kwargs):
     "Applies `func` in parallel to `items`, using `n_workers`"
     if n_workers is None: n_workers = min(16, num_cpus())
@@ -288,7 +299,7 @@ def parallel(f, items, *args, n_workers=None, **kwargs):
         return list(r)
 
 
-# Cell nr. 95; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 98; Comes from 'notebooks/00_export_v4.ipynb'
 # https://github.com/justheuristic/prefetch_generator
 class BackgroundGenerator(Thread):
     "Computes elements of a Generator in a background Thread."
@@ -317,7 +328,7 @@ class BackgroundGenerator(Thread):
         return next_item
 
 
-# Cell nr. 96; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 99; Comes from 'notebooks/00_export_v4.ipynb'
 def prefetch(max_prefetch:int=-1):
     """
     Decorator for wrapping a `yield`-ing Function with `BackgroundGenerator`,
@@ -336,7 +347,7 @@ def prefetch(max_prefetch:int=-1):
     return decorator
 
 
-# Cell nr. 98; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 101; Comes from 'notebooks/00_export_v4.ipynb'
 class ReLibName():
     "Regex expression that's compiled at first use but not before since it needs `Config().lib_name`"
     def __init__(self, pat, flags=0): self._re,self.pat,self.flags = None,pat,flags
@@ -348,7 +359,7 @@ class ReLibName():
         return self._re
 
 
-# Cell nr. 100; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 103; Comes from 'notebooks/00_export_v4.ipynb'
 def compose(*funcs, order=None):
     "Create a function that composes all functions in `funcs`, "\
     "passing along remaining `*args` and `**kwargs` to all"
@@ -360,7 +371,7 @@ def compose(*funcs, order=None):
     return _inner
 
 
-# Cell nr. 101; Comes from 'notebooks/00_export_v4.ipynb'
+# Cell nr. 104; Comes from 'notebooks/00_export_v4.ipynb'
 def last_index(x, o):
     "Finds the last index of occurence of `x` in `o` (returns -1 if no occurence)"
     try: return next(i for i in reversed(range(len(o))) if o[i] == x)
