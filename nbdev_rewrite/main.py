@@ -570,11 +570,11 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     cell_info['export_to_py'] = True # Using this command implicitly means to export this cell
     if result['from_string']:
         # TODO: unwrap cell content
-        convert_success, cell_info['processed_source_code'] = from_string_cell(cell_info['processed_source_code'])
+        convert_success, cell_info['clean_source_code'] = from_string_cell(cell_info['clean_source_code'])
         if not convert_success: return False
     is_internal = cell_info['is_internal'] = result['internal']
     if is_internal: pass # no contained names will be added to __all__ for importing
-    else: success, cell_info['names'] = find_names(cell_info['processed_source_code'])
+    else: success, cell_info['names'] = find_names(cell_info['clean_source_code'])
     conv_success, export_target = True, None
     if is_set['to'     ]: conv_success, export_target = module_to_path (result['to'], st=st)
     if is_set['to_path']: conv_success, export_target = make_valid_path(result['to_path'], st=st)
@@ -655,7 +655,7 @@ class DictLikeRepr():
 # Cell nr. 256
 class CellInfo(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_nr', 'cell_type',
-                 'original_source_code', 'processed_source_code',
+                 'original_source_code', 'clean_source_code',
                  'scope', 'export_to_py',
                  'export_to_scope', 'export_to_default', 'export_to',
                  'is_internal', 'names', 'comments')
@@ -663,7 +663,7 @@ class CellInfo(DictLikeAccess, DictLikeRepr):
         self.cell_nr               = cell_nr
         self.cell_type             = cell_type
         self.original_source_code  = cell_source
-        self.processed_source_code = cell_source
+        self.clean_source_code     = cell_source
         self.scope                 = scope
         self.export_to_py          = False
         self.export_to_scope       = 0
@@ -734,8 +734,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
                 for lineno, charno, *_ in comments[::-1]: lines.pop(lineno)
             else:
                 for lineno, charno, *_ in comments[::-1]: lines[lineno] = lines[lineno][:charno]
-            clean_source_code = '\n'.join(lines)
-            cell_info['processed_source_code'] = clean_source_code
+            cell_info['clean_source_code'] = '\n'.join(lines)
             # NOTE: Run commands
             for _, _, cmd, result, is_set in comments:
                 cmd_success = cmd2func[cmd](file_info, cell_info, result, is_set, st=st)
@@ -822,7 +821,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                 for to in cell['export_to']:
                     state:dict = export_files[to]
                     if not cell['is_internal']: state['names'].update(cell['names'])
-                    state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['processed_source_code'])}")
+                    state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['clean_source_code'])}")
             
             # NOTE: Handle a cell belonging to a scope and find the best match
             if scopes_available:
@@ -845,7 +844,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                         state:dict = export_files[to]
                         if not cell['is_internal']: state['names'].update(cell['names'])
                         for _ in range(cell['export_to_scope']):
-                            state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['processed_source_code'])}")
+                            state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell['clean_source_code'])}")
             else:
                 cell['export_to_default'] += cell['export_to_scope']
                 cell['export_to_scope'] = 0
@@ -859,7 +858,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                 state:dict = export_files[to]
                 if not cell['is_internal']: state['names'].update(cell['names'])
                 for _ in range(cell['export_to_default']):
-                    state['code'].append(f"{info_string}\n{relativify_imports(to, cell['processed_source_code'])}")
+                    state['code'].append(f"{info_string}\n{relativify_imports(to, cell['clean_source_code'])}")
         # NOTE: Set 'add_dunder_all' and check for mismatches
         for k, v in scopes.items(): # for all scopes that this files exports to
             if v is None: continue
