@@ -539,14 +539,13 @@ class ScopeUnit(DictLikeAccess, DictLikeRepr):
 # Cell nr. 228
 class ExportUnit(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_info'  , 'source_code'    , # TODO: Add scope and cell_nr for ease of use?
-                 'export_to'  , 'export_to_scope', # 'export_to_default',
+                 'export_to'  , 'export_to_scope',
                  'is_internal', 'names',)
     def __init__(self, cell_info, source_code=None, names=None):
         self.cell_info         = cell_info # NOTE: The cell that this unit came from
         self.source_code       = source_code
         self.export_to         = None
         self.export_to_scope   = False
-        # self.export_to_default = True # TODO: remove
         self.is_internal       = None
         self.names             = names
 
@@ -833,6 +832,11 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
             info_string = f"# {'Internal ' if cell.is_internal else ''}Cell nr. {cell_nr}"
             info_string_src = (info_string + f"; Comes from '{rel_orig}'")
             
+            assert ((cell.source_code is not None)
+                 or (cell.names is not None))
+            
+            assert cell.is_internal is not None
+            
             to:Path         = None
             to_default:bool = None
             
@@ -869,10 +873,14 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
             assert (not (to_default is None))
             
             state:dict = export_files[to]
-            if not cell.is_internal: state['names'].update(cell.names)
-            info = info_string if to_default else info_string_src
-            state['code'].append(f"{info}\n{relativify_imports(to, cell.source_code)}")
+            if (not cell.is_internal) and (cell.names is not None):
+                state['names'].update(cell.names)
+            if (cell.source_code is not None):
+                info = info_string if to_default else info_string_src
+                state['code'].append(f"{info}\n{relativify_imports(to, cell.source_code)}")
         # NOTE: Set 'add_dunder_all' and check for mismatches
+        # TODO: Should this be done before handling all the cells?
+        #       That way we could skip parsing the names if `add_dunder_all` is False for that file.
         scope_unit:ScopeUnit = None
         for scope, scope_unit in scopes.items(): # for all scopes that this files exports to
             if scope_unit is None: continue
