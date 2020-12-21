@@ -340,7 +340,7 @@ def unwrap_assign(node, names):
         for x in node.elts: unwrap_assign(x, names)
     elif isinstance(node, list):
         for x in node: unwrap_assign(x, names)
-    else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type.')
+    else: raise ValueError(f'Can\'t resolve {node} to name, unknown type.')
 
 
 # Internal Cell nr. 172
@@ -354,7 +354,7 @@ def resolve_decorator_name(node):
         if   isinstance(node.func, _ast.Name     ): return node.func.id
         elif isinstance(node.func, _ast.Attribute): return unwrap_attr(node.func)
     elif isinstance(node, _ast.Attribute): return unwrap_attr(node)
-    raise SyntaxError(f'Can\'t resolve decorator {node} to name, unknown type.')
+    raise ValueError(f'Can\'t resolve decorator {node} to name, unknown type.')
 
 def decorators(node): yield from (resolve_decorator_name(d) for d in node.decorator_list)
 
@@ -371,7 +371,7 @@ def update_from_all_(node, names):
         raise SyntaxError(f'Subscript expression not allowed in _all_.')
     elif isinstance(node, _ast.Starred):
         raise SyntaxError(f'Starred expression *{node.value.id} not allowed in _all_.')
-    else: raise SyntaxError(f'Can\'t resolve {node} to name, unknown type.')
+    else: raise ValueError(f'Can\'t resolve {node} to name, unknown type.')
 
 
 # Cell nr. 177
@@ -546,21 +546,22 @@ class ExportUnit(DictLikeAccess, DictLikeRepr):
 class CellInfo(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_nr', 'cell_type',
                  'original_source_code', 'clean_source_code',
-                 'scope', 'export_to_py',
-                 'export_to_scope', 'export_to_default', 'export_to',
-                 'is_internal', 'names', 'comments')
+                 'scope', # 'export_to_py',
+                 # 'export_to_scope', 'export_to_default', 'export_to',
+                 # 'is_internal', 'names',
+                 'comments')
     def __init__(self, cell_nr, cell_type, cell_source, scope):
         self.cell_nr               = cell_nr
         self.cell_type             = cell_type
         self.original_source_code  = cell_source
         self.clean_source_code     = cell_source
         self.scope                 = scope
-        self.export_to_py          = False
-        self.export_to_scope       = 0
-        self.export_to_default     = 0
-        self.export_to             = list()
-        self.is_internal           = None
-        self.names                 = None
+#         self.export_to_py          = False
+#         self.export_to_scope       = 0
+#         self.export_to_default     = 0
+#         self.export_to             = list()
+#         self.is_internal           = None
+#         self.names                 = None
         self.comments              = list()
 
 
