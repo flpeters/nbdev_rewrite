@@ -539,19 +539,19 @@ class ScopeUnit(DictLikeAccess, DictLikeRepr):
 # Cell nr. 228
 class ExportUnit(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_info'  , 'source_code'    , # TODO: Add scope and cell_nr for ease of use?
-                 'export_to'  , 'export_to_scope', 'export_to_default',
+                 'export_to'  , 'export_to_scope', # 'export_to_default',
                  'is_internal', 'names',)
     def __init__(self, cell_info, source_code=None, names=None):
         self.cell_info         = cell_info # NOTE: The cell that this unit came from
         self.source_code       = source_code
-        self.export_to         = list()
-        self.export_to_scope   = 0
-        self.export_to_default = 0
+        self.export_to         = None
+        self.export_to_scope   = False
+        # self.export_to_default = True # TODO: remove
         self.is_internal       = None
         self.names             = names
 
 
-# Cell nr. 230
+# Cell nr. 229
 class CellInfo(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_nr', 'cell_type',
                  'original_source_code', 'clean_source_code',
@@ -566,7 +566,7 @@ class CellInfo(DictLikeAccess, DictLikeRepr):
         self.export_units          = list()
 
 
-# Cell nr. 231
+# Cell nr. 230
 class FileInfo(DictLikeAccess, DictLikeRepr):
     __slots__ = ('origin_file', 'relative_origin', 'nb_version',
                  'export_scopes', 'cells', 'export_units')
@@ -580,7 +580,7 @@ class FileInfo(DictLikeAccess, DictLikeRepr):
         self.export_units    = list()       if (export_units  is None) else export_units
 
 
-# Cell nr. 234
+# Cell nr. 233
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -591,12 +591,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 235
+# Cell nr. 234
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 237
+# Cell nr. 236
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'no_dunder_all': False, 'scoped': False})
 @Traced
@@ -622,15 +622,10 @@ def kw_default_exp(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
     file_info.export_scopes[scope] = ScopeUnit(target         = new_target,
                                                add_dunder_all = (not result['no_dunder_all']),
                                                cell_info      = cell_info)
-#     file_info['export_scopes'][scope] = {
-#         'target' : new_target,
-#         'add_dunder_all' : (not result['no_dunder_all']),
-#         'cell_info' : cell_info,
-#     }
     return success
 
 
-# Cell nr. 239
+# Cell nr. 238
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False, 'from_string':False})
 @Traced
@@ -656,17 +651,16 @@ def kw_export(file_info, cell_info, result, is_set, st:StackTrace) -> bool:
         if is_set['ignore_scope']:
             return st.report_error(ValueError("Setting 'ignore_scope' is not allowed when "\
                                    f"exporting to a custom target using 'to' or 'to_path'."))
-        export_unit.export_to.append(export_target) # Set a new export target just for this cell.
+        export_unit.export_to = export_target # Set a new export target just for this cell.
     else:
-        if result['ignore_scope']: export_unit.export_to_default += 1
-        else:                      export_unit.export_to_scope   += 1
+        export_unit.export_to_scope = not result['ignore_scope'] # NOTE: if ignore_scope: export_to_default
     export_unit.source_code = source_code
     cell_info.export_units.append(export_unit)
     file_info.export_units.append(export_unit)
     return success
 
 
-# Cell nr. 249
+# Cell nr. 248
 def crawl_directory(path:Path, recurse:bool=True) -> list:
     "Crawl the `path` directory for a list of .ipynb files."
     # TODO: Handle symlinks?
@@ -688,20 +682,20 @@ def crawl_directory(path:Path, recurse:bool=True) -> list:
                 else: continue
 
 
-# Cell nr. 250
+# Cell nr. 249
 def read_nb(fname:Path) -> dict:
     "Read the `fname` notebook."
     with open(Path(fname),'r', encoding='utf8') as f: return dict(nbformat.reads(f.read(), as_version=4))
 
 
-# Cell nr. 251
+# Cell nr. 250
 @prefetch(max_prefetch=-1) # NOTE: max_prefetch <= 0 means the queue size is infinite
 def async_load_notebooks(path:Path, recurse:bool=True) -> (Path, dict):
     "Crawl for notebooks in the `path` directory, and load in a background thread."
     for file_path in crawl_directory(path, recurse): yield (file_path, read_nb(file_path))
 
 
-# Internal Cell nr. 257
+# Internal Cell nr. 256
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -711,7 +705,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 259
+# Cell nr. 258
 @Traced
 def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     success = True
@@ -781,7 +775,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     return success, file_info
 
 
-# Cell nr. 260
+# Cell nr. 259
 @Traced
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -803,7 +797,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     return success, parsed_files
 
 
-# Cell nr. 262
+# Cell nr. 261
 @Traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     success:bool = True
@@ -812,6 +806,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     # NOTE: This will contain all the merges files
     export_files = defaultdict(lambda: {'names': set(), 'code': [], 'orig': None, 'add_dunder_all':None})
     
+    file_info:FileInfo = None
     for file_info in parsed_files['files']:
         rel_orig:str = file_info.relative_origin
         st.ext(file  = rel_orig)
@@ -831,25 +826,23 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
             else: return st.report_error(
                 ValueError(f'Multiple files have {default_export} as the default export target. '\
                            f'(old: {default_state["orig"]} | new: {rel_orig})')), None
-                
+        cell:ExportUnit = None
         for cell in file_info.export_units:
-            # NOTE: 'cell' is actually an instance of ExportUnit.
             cell_nr = cell.cell_info.cell_nr
             st.ext(cellno=cell_nr)
             info_string = f"# {'Internal ' if cell.is_internal else ''}Cell nr. {cell_nr}"
             info_string_src = (info_string + f"; Comes from '{rel_orig}'")
             
-            # NOTE: Handle a cell directly specifying its export target
-            if len(cell.export_to) > 0:
-                for to in cell.export_to:
-                    state:dict = export_files[to]
-                    if not cell.is_internal: state['names'].update(cell.names)
-                    state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell.source_code)}")
+            to:Path         = None
+            to_default:bool = None
             
-            # NOTE: Handle a cell belonging to a scope and find the best match
-            if scopes_available:
-                if cell.export_to_scope > 0:
-                    # Do scope matching
+            # NOTE: Handle a cell directly specifying its export target
+            if not (cell.export_to is None):
+                to:Path = cell.export_to
+                to_default = False
+            else:
+                # NOTE: We know it's not a fixed target, so now search for a scope
+                if scopes_available and cell.export_to_scope:
                     cell_scope:tuple = cell.cell_info.scope
                     best_fit, best_fit_len = zero_tuple, 0
                     # NOTE: The number of scopes should usually be relatively small, so this should be fine.
@@ -860,28 +853,27 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
                             best_fit, best_fit_len = scope, new_len
                     to:Path = scopes[best_fit].target
                     if (best_fit == zero_tuple) or (to == default_export):
-                        cell.export_to_default += cell.export_to_scope
-                        cell.export_to_scope = 0
+                        to_default = True
                     else:
-                        state:dict = export_files[to]
-                        if not cell.is_internal: state['names'].update(cell.names)
-                        for _ in range(cell.export_to_scope):
-                            state['code'].append(f"{info_string_src}\n{relativify_imports(to, cell.source_code)}")
-            else:
-                cell.export_to_default += cell.export_to_scope
-                cell.export_to_scope = 0
+                        to_default = False
+                else:
+                    # No alternative scopes are available, so export to default
+                    # assert cell.export_to_default
+                    if none_default:
+                        return st.report_error(ValueError(f'Cell does not have a export target. '\
+                                         'Did you forget to add a default target using `default_exp`?')), None
+                    to:Path = default_export
+                    to_default = True
             
-            # NOTE: Handle a cell ignoring all scopes, or being in the default scope.
-            if cell.export_to_default > 0:
-                if none_default:
-                    return st.report_error(ValueError(f'Cell does not have a export target. '\
-                                     'Did you forget to add a default target using `default_exp`?')), None
-                to:Path = default_export
-                state:dict = export_files[to]
-                if not cell.is_internal: state['names'].update(cell.names)
-                for _ in range(cell.export_to_default):
-                    state['code'].append(f"{info_string}\n{relativify_imports(to, cell.source_code)}")
+            assert (not (to         is None)) and isinstance(to, Path)
+            assert (not (to_default is None))
+            
+            state:dict = export_files[to]
+            if not cell.is_internal: state['names'].update(cell.names)
+            info = info_string if to_default else info_string_src
+            state['code'].append(f"{info}\n{relativify_imports(to, cell.source_code)}")
         # NOTE: Set 'add_dunder_all' and check for mismatches
+        scope_unit:ScopeUnit = None
         for scope, scope_unit in scopes.items(): # for all scopes that this files exports to
             if scope_unit is None: continue
             state = export_files[scope_unit.target]
@@ -901,7 +893,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, export_files
 
 
-# Cell nr. 269
+# Cell nr. 268
 @Traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -930,7 +922,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 270
+# Cell nr. 269
 @Traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     # print(dict(export_files))
@@ -941,7 +933,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 272
+# Cell nr. 271
 @Traced
 def main(recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     "Load, Parse, Merge, and Write .ipynb files to .py files."
@@ -979,7 +971,7 @@ def main(recurse:bool=True, st:StackTrace=None) -> (bool, dict, dict):
     return success, parsed_files, merged_files
 
 
-# Cell nr. 274
+# Cell nr. 273
 set_arg_parse_report_options(report_error=False)
 set_main_report_options(report_optional_error=False,
                         report_command_found=False,
