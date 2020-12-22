@@ -101,7 +101,8 @@ Args:
 - `internal`: The variable, function and class names of this cell will not be added to `__all__` in the exported file, making them hidden from any `import *`.
 - `to`: Instead of exporting to the notebook or scope wide default file, this cell is exported to the file specified in this argument. File is written in python module form.
 - `to_path`: The same as `to`, but this argument is written as a path.
-- `ignore_scope`: This cell ignores any export targets set for the scope it resides in, and instead always uses the default for the entire notebook. This argument is incompatible with `to` and `to_path`.  
+- `ignore_scope`: This cell ignores any export targets set for the scope it resides in, and instead always uses the default for the entire notebook. This argument is incompatible with `to` and `to_path`.
+- `from_string`: This argument is used to solve the problem of having code that's supposed to be exported to a .py file, but that code should never be run from the notebook. If you add this argument, you can wrap the code you want to export safely in a python string, which will then be parsed and unwrapped during exporting. In this project this feature is used to e.g. wrap the call to `setuptools.setup()`.  
 
 `default_exp`: Set the default file that cells of this notebook will be exported to.    
 Args:
