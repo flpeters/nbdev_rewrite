@@ -52,8 +52,8 @@ def set_main_report_options(report_optional_error:bool=False,
 def report_successful_export(parsed_files, merged_files):
     "Report stats and compressed information about parsed and exported files."
     p = Config().proj_path
-    n_nbs = nr_of_notebooks_parsed = len(parsed_files['files'])
-    n_py  = nr_of_output_py_files = len(merged_files)
+    n_nbs = nr_of_notebooks_parsed = len(parsed_files)
+    n_py  = nr_of_output_py_files  = len(merged_files)
     Title = f'{n_nbs} notebook{"s"*int(n_nbs!=1)} {"have" if n_nbs!=1 else "has"} been parsed, '\
             f'resulting in {n_py} python file{"s"*int(n_py!=1)}.\n\n'
     
@@ -61,7 +61,7 @@ def report_successful_export(parsed_files, merged_files):
     nb_info = f'The following {n_nbs} notebook{"s"*int(n_nbs!=1)} have been parsed:\n'
     nb_info += '-' * (len(nb_info) - 1)
     n_out = nr_of_files_outputting_code = 0
-    for file in parsed_files['files']:
+    for file in parsed_files:
         nb_info += f"\n{file['relative_origin']} ({len(file['cells'])} cells total)\n"
         default = file['export_scopes'][(0,)]
         n_exp = len(file['export_scopes']) - int(default is None)
@@ -789,10 +789,7 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
 def parse_all(file_generator, st:StackTrace) -> (bool, dict):
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
     success:bool = True
-    parsed_files = {
-        # Add flags and settings variables above this line
-        'files': list()
-    }
+    parsed_files = list()
     # TODO: use multithreading / multiprocessing per file / per n cells
     for file_path, file in file_generator:
         # if file_path.name != THIS_FILE: continue # For Debugging
@@ -801,7 +798,7 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
             success = False # NOTE: Try every file, if one fails return False
         # TODO: before returning, give any meta programm a chance to run.
         # maybe have parse_file return some additional information about any meta programm
-        parsed_files['files'].append(file)
+        parsed_files.append(file)
         
     return success, parsed_files
 
@@ -814,7 +811,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     zero_tuple = (0,)
     
     file_info:FileInfo = None
-    for file_info in parsed_files['files']:
+    for file_info in parsed_files:
         rel_orig:str = file_info.relative_origin
         st.ext(file  = rel_orig)
         st.ext_clear_cellno() # NOTE: Clear cellno, because this is a new file.
@@ -893,7 +890,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
         for scope, scope_unit in scopes.items(): # for all scopes that this files exports to
             if scope_unit is None: continue
             state = merged_files[scope_unit.target]
-            if   state['add_dunder_all'] is None: # it defaults to None, see top of the function
+            if   state['add_dunder_all'] is None: # it defaults to None, see MergedFileInfo
                 state['add_dunder_all'] = scope_unit.add_dunder_all
             elif state['add_dunder_all'] == scope_unit.add_dunder_all:
                 continue
