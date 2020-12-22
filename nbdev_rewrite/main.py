@@ -723,8 +723,8 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
     metadata  :dict       =  file['metadata']
     file_info = FileInfo(origin_file = file_path,
                          nb_version  = nb_version)
-    st.ext(file=file_info['relative_origin'])
-    cells:list = file_info['cells']
+    st.ext(file=file_info.relative_origin)
+    cells:list = file_info.cells
     scope_count :[int] = [0]
     scope_level :int   = 0
     for i, cell in enumerate(file['cells']):
@@ -745,14 +745,13 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
                     if not (cmd in cmd2func):
                         return st.report_error(ValueError(f"The command '{cmd}' is recognized, but does not "\
                                         "map to a corresponding action in 'cmd2func'."),
-                                        excerpt=comment, span=(charno, len(cmd)+3)), None
+                                        excerpt=comment, span=(charno, len(cmd)+3)), file_info
                     if main_REPORT_COMMAND_FOUND:
                         print(f'Found: {cmd} @ ({i}, {lineno}, {charno}) with args: {result}')
-                    # TODO: store 'comment' as well?
-                    comments.append((lineno, charno, cmd, result, is_set))
+                    comments.append((lineno, charno, comment, cmd, result, is_set))
                 else: pass # NOTE: This happens all the time, and just means this is not a command comment.
             if len(comments) == 0: continue
-            cell_info['comments'] = comments
+            cell_info.comments = comments
             # TODO: count nr of found cells for run statistics
             # NOTE: Remove command comments from source code
             lines = cell_source.splitlines()
@@ -760,11 +759,11 @@ def parse_file(file_path:Path, file:dict, st:StackTrace) -> (bool, dict):
                 for lineno, charno, *_ in comments[::-1]: lines.pop(lineno)
             else:
                 for lineno, charno, *_ in comments[::-1]: lines[lineno] = lines[lineno][:charno]
-            cell_info['clean_source_code'] = '\n'.join(lines)
+            cell_info.clean_source_code = '\n'.join(lines)
             # NOTE: Run commands
-            for _, _, cmd, result, is_set in comments:
+            for _, _, _, cmd, result, is_set in comments:
                 cmd_success = cmd2func[cmd](file_info, cell_info, result, is_set, st=st)
-                if not cmd_success: return False, file_info # NOTE: Return on first error in a file.
+                if not cmd_success: return False, file_info
         elif cell_type == 'markdown':
             res = re_match_heading.search(cell_source)
             if not (res is None): # this cell contains a heading
@@ -795,11 +794,10 @@ def parse_all(file_generator, st:StackTrace) -> (bool, dict):
         # if file_path.name != THIS_FILE: continue # For Debugging
         parse_success, file = parse_file(file_path, file, st=st)
         if not parse_success:
-            success = False # NOTE: Try every file, if one fails return False
+            success = False # NOTE: Try every file, even if one fails
         # TODO: before returning, give any meta programm a chance to run.
         # maybe have parse_file return some additional information about any meta programm
         parsed_files.append(file)
-        
     return success, parsed_files
 
 
@@ -822,14 +820,33 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
         # NOTE: Having no default is ok, as long as all cells still have a valid export target
         none_default    :bool      = (default_scope is None)
         default_export  :Path      = None if none_default else default_scope.target
-            
+        
         if not none_default:
-            # NOTE: Set this notebooks default as the origin of one of the `export_files`.
-            default_state:dict = merged_files[default_export]
-            if (default_state['orig'] is None): default_state['orig'] = rel_orig
+            # NOTE: Set this notebook as the origin of this notebooks default target in `merged_files`.
+            state:dict = merged_files[default_export]
+            if (state.orig is None): state.orig = rel_orig
             else: return st.report_error(
                 ValueError(f'Multiple files have {default_export} as the default export target. '\
-                           f'(old: {default_state["orig"]} | new: {rel_orig})')), None
+                           f'(old: {state.orig} | new: {rel_orig})')), None
+        
+        # NOTE: Set 'add_dunder_all', and check for mismatches.
+        v:ScopeUnit = None
+        for scope, v in scopes.items():
+            if v is None: continue
+            state = merged_files[v.target]
+            if   state.add_dunder_all is None: # NOTE: defaults to None
+                state.add_dunder_all = v.add_dunder_all
+            elif state.add_dunder_all == v.add_dunder_all:
+                continue # NOTE: Another scope, possibly in another file also exports to this target,
+                         #       but 'add_dunder_all' has the same value there, so no problem.
+            else:
+                # TODO: To improve this error message further, information about which previous files / cells
+                # affected the same export state are necessary
+                return st.report_error(ValueError('Multiple `default_exp` commands which specify the same target '\
+                                        'cannot have different values for the `no_dunder_all` argument.\n'\
+                                       f"The value defined in cell nr {v.cell_info.cell_nr} in '{rel_orig}' "\
+                                        'does not match with a previous definition.')), None
+        
         cell:ExportUnit = None
         for cell in file_info.export_units:
             cell_nr = cell.cell_info.cell_nr
@@ -879,30 +896,11 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
             
             state:dict = merged_files[to]
             if (not cell.is_internal) and (cell.names is not None):
-                state['names'].update(cell.names)
+                state.names.update(cell.names)
             if (cell.source_code is not None):
                 info = info_string if to_default else info_string_src
-                state['code'].append(f"{info}\n{relativify_imports(to, cell.source_code)}")
-        # NOTE: Set 'add_dunder_all' and check for mismatches
-        # TODO: Should this be done before handling all the cells?
-        #       That way we could skip parsing the names if `add_dunder_all` is False for that file.
-        scope_unit:ScopeUnit = None
-        for scope, scope_unit in scopes.items(): # for all scopes that this files exports to
-            if scope_unit is None: continue
-            state = merged_files[scope_unit.target]
-            if   state['add_dunder_all'] is None: # it defaults to None, see MergedFileInfo
-                state['add_dunder_all'] = scope_unit.add_dunder_all
-            elif state['add_dunder_all'] == scope_unit.add_dunder_all:
-                continue
-            else:
-                # TODO: To improve this error message further, information about which previous files / cells
-                # affected the same export state are necessary
-                return st.report_error(ValueError('Multiple `default_exp` commands which specify the same target '\
-                                        'cannot have different values for the `no_dunder_all` argument.\n'\
-                                       f"The value defined in cell nr {scope_unit.cell_info.cell_nr} in '{rel_orig}' "\
-                                       f'does not match with a previous definition.')), None
-        # NOTE: The files can't yet be written, because there might be other notebooks exporting to the same files.
-        # NOTE: This is the end of the "for each file" loop
+                state.code.append(f"{info}\n{relativify_imports(to, cell.source_code)}")
+        # NOTE: Here is the end of the "for each file" loop
     return success, merged_files
 
 
@@ -910,10 +908,10 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
 @Traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
-    orig:str  = state['orig']
-    names:set = state['names']
-    code:list = state['code']
-    add_dunder_all:bool = state['add_dunder_all']
+    orig:str            = state.orig
+    names:set           = state.names # This can be an empty set
+    code:list           = state.code # This can be an empty list
+    add_dunder_all:bool = state.add_dunder_all
     sep:str = '\n\n\n'
     if orig is None:
         warning = f'# AUTOGENERATED! DO NOT EDIT! View info comment on each cell for file to edit.'
@@ -938,7 +936,6 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
 # Cell nr. 270
 @Traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
-    # print(dict(export_files))
     success:bool = True
     for to, state in merged_files.items():
         write_success = write_file(to=to, state=state, st=st)
