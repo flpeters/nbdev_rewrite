@@ -125,9 +125,12 @@ def create_config(lib_name,
     path = args.pop('cfg_path')
     name = args.pop('cfg_name')
     kwargs = args.pop('kwargs') # NOTE: locals() also contains `kwargs` as a key, so remove it
-    config = OrderedDict(filter(lambda x: x[1] is not None, # NOTE: Filter out None values
-                                sorted({**args, **kwargs}.items(),
-                                       key=lambda x:x[0]))) # NOTE: Sort by key
+    # TODO: move the filtering and sorting to `save_config_file()` ?
+    config = OrderedDict(sorted(filter(lambda x: x[1] is not None, # NOTE: Filter out None values
+                                       {**args, **kwargs}.items()),
+                                key=lambda x:x[0])) # NOTE: Sort by key
+    for key in ['lib_name', 'version']:
+        assert (key in config) and (config[key] is not None), f"'{key}' is required for creating {cfg_name}"
     save_config_file(Path(path)/name, config)
 
 
@@ -171,7 +174,7 @@ Parameters
     Present for compatibility with the original 'nbdev' project. This folder is
     where documentation generated from your notebooks in `nbs_path` is stored.
 
-`version` : str, optional
+`version` : str
     A version number in the '{major}.{minor}.{patch}' semantic versioning format.
 `min_python` : {..., '3.6', 3.7', '3.8', '3.9', ...}, optional
     The minimum python version necessary to run your code [1].
