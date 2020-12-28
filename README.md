@@ -26,7 +26,7 @@ or:
 The top level directory of your project should contain a `settings.ini`.  
 You can easily create this file by runnnig:
 ```python
-from nbdev_rewrite.main import create_config
+from nbdev_rewrite import create_config
 create_config(lib_name='MY_LIB_NAME')
 ```
 This function has many settings and is well documented.  
@@ -43,7 +43,7 @@ After installing the `nbdev_rewrite` package via the steps above, and having cre
 The package layout and names will change in the future, for now however this works.
 
 ```python
-from nbdev_rewrite.main import main as convert2py, set_main_report_options
+from nbdev_rewrite import convert2py, set_main_report_options
 
 set_main_report_options(report_optional_error = False,
                         report_command_found  = False,

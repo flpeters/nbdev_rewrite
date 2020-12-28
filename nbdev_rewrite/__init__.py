@@ -7,4 +7,4 @@ __version__ = '0.0.1'
 
 # Cell nr. 279; Comes from 'notebooks/00_export_v4.ipynb'
 from .main import create_config
-from .main import main as convert2py, set_main_report_options
+from .main import convert2py, set_main_report_options
