@@ -924,7 +924,7 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
         if to.name == '__init__.py': dirs_with_init.add(d)
     for d in dirs:
         if not d.exists():
-            try: d.mkdir(parents=True, exists_ok=True)
+            try: d.mkdir(parents=True, exist_ok=True)
             except Exception as e: return st.report_error(e)
         if d not in dirs_with_init: # same as `dirs.difference(dirs_with_init)`
             # NOTE: If not exported by user, write __init__.py with default content on every run.
