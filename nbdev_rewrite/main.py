@@ -79,7 +79,8 @@ def report_successful_export(parsed_files, merged_files):
     py_info = f'The following {n_py} python file{"s"*int(n_py!=1)} {"have" if n_py!=1 else "has"} been generated:\n'
     py_info += '-' * (len(py_info) - 1) + '\n'
     for to, state in merged_files.items():
-        n_cells = len(state['code'])
+        n_cells = str(len(state['code']))
+        n_cells = (max(0, 4-len(n_cells))* ' ') + n_cells
         py_info += f'---> {n_cells} cell{"s"*int(n_cells!=1)} output to {relative_path(to, p)}\n'
         
     print(f'{Title}{nb_info}\n\n{Middle}\n\n{py_info}')
