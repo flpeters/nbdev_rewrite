@@ -7,7 +7,9 @@ MODULE__IMPORTS__FLAG = None
 
 
 # Cell nr. 76; Comes from 'notebooks/00_export_v4.ipynb'
-import os,re,functools
+import os
+import re
+import functools
 import concurrent.futures
 from threading import Thread
 from queue import Queue
@@ -310,44 +312,68 @@ def parallel(f, items, *args, n_workers=None, **kwargs):
 
 
 # Cell nr. 103; Comes from 'notebooks/00_export_v4.ipynb'
-# https://github.com/justheuristic/prefetch_generator
+# https://github.com/flpeters/prefetch_generator
 class BackgroundGenerator(Thread):
-    "Computes elements of a Generator in a background Thread."
-    def __init__(self, generator, max_prefetch:int=-1):
+    """
+    This Class computes the elements of a generator in a Background Thread.
+    """
+    def __init__(self, generator, max_prefetch:int=0):
         """
-        `generator`: A Generator to wrap and prefetch from in a separate thread.
-        `max_prefetch`: How many items to maximally prefetch at any given time.
-        If `max_prefetch` is <= 0, then the queue size is infinite.
+        Parameters
+        ----------
+        generator : generator or genexp or any
+            The generator to compute elements from in a background thread.
+        
+        max_prefetch : int, optional, default: 1
+            How many elements of the generator will be precomputed ahead at most.
+            If `max_prefetch` is <= 0, then the queue size is infinite.
+            When `max_prefetch` elements have been computed ahead, the background thread will simply wait for elements to be consumed by another thread.
+
+        See Also
+        --------
+        prefetch : Decorator for wrapping a function which returns a generator with `BackgroundGenerator`.
         """
         super().__init__()
-        self.queue, self.generator, self.daemon = Queue(max_prefetch), generator, True
+        self.queue           = Queue(max_prefetch)
+        self.generator       = generator
+        self.Continue  = True
+        self.daemon    = True
         self.start()
     
     def run(self):
         try:
-            for item in self.generator: self.queue.put(item)
-        except Exception as e:
-            print('WARNING: Failed in BackgroundGenerator Thread!')
-            raise e
-        finally: self.queue.put(StopIteration)
+            for item in self.generator: self.queue.put((True , item))
+        except Exception as e:          self.queue.put((False, e))
+        finally:                        self.queue.put((False, StopIteration))
     
     def __iter__(self): return self
     def __next__(self):
-        next_item = self.queue.get()
-        if next_item is StopIteration: raise StopIteration
-        return next_item
+        if self.Continue:
+            success, next_item = self.queue.get()
+            if success: return next_item
+            else:
+                self.Continue = False
+                raise next_item
+        else: raise StopIteration
 
 
 # Cell nr. 104; Comes from 'notebooks/00_export_v4.ipynb'
-def prefetch(max_prefetch:int=-1):
+# https://github.com/flpeters/prefetch_generator
+def prefetch(max_prefetch:int=0):
     """
-    Decorator for wrapping a `yield`-ing Function with `BackgroundGenerator`,
-    which computes elements of the generator in a background Thread.
-    
+    Decorator for wrapping a function which returns a generator with `BackgroundGenerator`.
     A new instance of `BackgroundGenerator` is created every time the decorated function is called.
     
-    `max_prefetch`: How many items to maximally prefetch at any given time.
-    If `max_prefetch` is <= 0, then the queue size is infinite.
+    Parameters
+    ----------
+    max_prefetch : int, optional, default: 1
+            How many elements of the generator will be precomputed ahead at most.
+            If `max_prefetch` is <= 0, then the queue size is infinite.
+            When `max_prefetch` elements have been computed ahead, the background thread will simply wait for elements to be consumed by another thread.
+    
+    See Also
+    --------
+    BackgroundGenerator : Class which computes the elements of a generator in a Background Thread.
     """
     def decorator(generator):
         def wrapper(*args,**kwargs):

@@ -120,6 +120,8 @@ def parse_arguments(command:dict, args:[str]) -> (bool, dict, dict):
     # TODO: check that the type of all commands is supported ahead of time?
     # TODO: handle quoted arguments?
     # TODO: support command aliases?
+    if isinstance(args, str):
+        args = args.split() # TODO: should this raise an error instead of doing the conversion?
     members = command.keys()
     result  = command.copy()
     is_set  = {member : False for member in members}
