@@ -49,46 +49,7 @@ def set_main_report_options(report_optional_error:bool=False,
     main_REPORT_RUN_STATISTICS = report_run_statistics
 
 
-# Internal Cell nr. 122
-def report_successful_export(ParsedNotebooks:list, merged_files):
-    "Report stats and compressed information about parsed and exported files."
-    p = Config().proj_path
-    n_nbs = nr_of_notebooks_parsed = len(ParsedNotebooks)
-    n_py  = nr_of_output_py_files  = len(merged_files)
-    Title = f'{n_nbs} notebook{"s"*int(n_nbs!=1)} {"have" if n_nbs!=1 else "has"} been parsed, '\
-            f'resulting in {n_py} python file{"s"*int(n_py!=1)}.\n\n'
-    
-    # Information about which notebooks export to which python files
-    nb_info = f'The following {n_nbs} notebook{"s"*int(n_nbs!=1)} have been parsed:\n'
-    nb_info += '-' * (len(nb_info) - 1)
-    n_out = nr_of_files_outputting_code = 0
-    Notebook:NotebookStruct = None # type hint
-    for Notebook in ParsedNotebooks:
-        nb_info += f"\n{Notebook.RelativeFilePath} ({len(Notebook.ExportCells)} cells total)\n"
-        default = Notebook.ExportScopes[(0,)]
-        n_exp = len(Notebook.ExportScopes) - int(default is None)
-        nb_info += f'---> default:\t{None if (default is None) else relative_path(default["target"], p)}'
-        for scope, target in sorted(Notebook.ExportScopes.items(), key=lambda x: x[0]):
-            if scope == (0,): continue
-            nb_info += f"\n---> {scope}:\t{relative_path(target['target'], p)}"
-        if n_exp > 0: n_out += 1
-    
-    
-    Middle = f'Of the {n_nbs} notebook{"s"*int(n_nbs!=1)} parsed, '\
-             f'{n_out} {"are" if n_out!=1 else "is"} outputting code.'
-    
-    # Information about how many Python files have been generated, and the number of cells exported to each
-    py_info = f'The following {n_py} python file{"s"*int(n_py!=1)} {"have" if n_py!=1 else "has"} been generated:\n'
-    py_info += '-' * (len(py_info) - 1) + '\n'
-    for to, state in merged_files.items():
-        n_cells = str(len(state['code']))
-        n_cells = (max(0, 4-len(n_cells))* ' ') + n_cells
-        py_info += f'---> {n_cells} cell{"s"*int(n_cells!=1)} output to {relative_path(to, p)}\n'
-        
-    print(f'{Title}{nb_info}\n\n{Middle}\n\n{py_info}')
-
-
-# Cell nr. 125
+# Cell nr. 123
 class StackTrace: pass # only for :StackTrace annotations to work
 class StackTrace:
     _up:StackTrace = None
@@ -188,7 +149,7 @@ class StackTrace:
                               excerpt=excerpt, span=span)
 
 
-# Cell nr. 126
+# Cell nr. 124
 def Traced(f):
     "The Annotated function will have a StackTrace instance passed to it as the `st` keyword-argument.\n"\
     "That instance represents the annotated function, with a reference to the calling site."
@@ -215,7 +176,7 @@ def Traced(f):
     return _wrapper
 
 
-# Internal Cell nr. 144
+# Internal Cell nr. 142
 # TODO: Only look for 0 indent comments?
 def iter_comments(src:str, pure_comments_only:bool=True, line_limit:int=None) -> Tuple[str, Tuple[int, int]]:
     "Detect all comments in a piece of code, excluding those that are a part of a string."
@@ -249,7 +210,7 @@ def iter_comments(src:str, pure_comments_only:bool=True, line_limit:int=None) ->
             prev_c = c
 
 
-# Internal Cell nr. 148
+# Internal Cell nr. 146
 # https://docs.python.org/3/library/re.html
 re_match_comment = re.compile(r"""
         ^              # start of the string
@@ -260,7 +221,7 @@ re_match_comment = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE) # re.MULTILINE is not passed, since this regex is used on each line separately.
 
 
-# Internal Cell nr. 153
+# Internal Cell nr. 151
 @Traced
 def parse_comment(all_commands:dict, comment:str, st:StackTrace) -> Tuple[bool, str, dict, dict]:
     "Finds command names and arguments in comments and parses them with parse_arguments()"
@@ -291,7 +252,7 @@ def parse_comment(all_commands:dict, comment:str, st:StackTrace) -> Tuple[bool, 
     return True, cmd, result, is_set
 
 
-# Internal Cell nr. 159
+# Internal Cell nr. 157
 @Traced
 def from_string_cell(source:str, st:StackTrace) -> (bool, str):
     "Take a cells source code containing a single string and return the content of that string."
@@ -317,7 +278,7 @@ def from_string_cell(source:str, st:StackTrace) -> (bool, str):
                                              'Expected cell to contain exactly one String.')), None
 
 
-# Internal Cell nr. 173
+# Internal Cell nr. 171
 def lineno(node):
     "Format a string containing location information on ast nodes. Used for Debugging only."
     lineno     = getattr(node, 'lineno', None)
@@ -325,14 +286,14 @@ def lineno(node):
     return lineno, col_offset
 
 
-# Internal Cell nr. 175
+# Internal Cell nr. 173
 def unwrap_attr(node:_ast.Attribute) -> str:
     "Joins a sequance of Attribute accesses together in a single string. e.g. numpy.array"
     if isinstance(node.value, _ast.Attribute): return '.'.join((unwrap_attr(node.value), node.attr))
     else: return '.'.join((node.value.id, node.attr))
 
 
-# Internal Cell nr. 176
+# Internal Cell nr. 174
 def unwrap_assign(node, names):
     "inplace, recursive update of list of names"
     if   isinstance(node, _ast.Name)      : names.append(node.id)
@@ -346,11 +307,11 @@ def unwrap_assign(node, names):
     else: raise ValueError(f'Can\'t resolve {node} to name, unknown type.')
 
 
-# Internal Cell nr. 177
+# Internal Cell nr. 175
 def not_private(name): return not (name.startswith('_') and (not name.startswith('__')))
 
 
-# Internal Cell nr. 178
+# Internal Cell nr. 176
 def resolve_decorator_name(node):
     if   isinstance(node, _ast.Name): return node.id
     elif isinstance(node, _ast.Call):
@@ -362,7 +323,7 @@ def resolve_decorator_name(node):
 def decorators(node): yield from (resolve_decorator_name(d) for d in node.decorator_list)
 
 
-# Internal Cell nr. 179
+# Internal Cell nr. 177
 def update_from_all_(node, names):
     "inplace, recursive update of set of names, by parsing the right side of a _all_ variable"
     if   isinstance(node, _ast.Str): names.add(node.s)
@@ -377,7 +338,7 @@ def update_from_all_(node, names):
     else: raise ValueError(f'Can\'t resolve {node} to name, unknown type.')
 
 
-# Internal Cell nr. 182
+# Internal Cell nr. 180
 @Traced
 def find_names(code:str, st:StackTrace) -> (bool, set):
     "Find all function, class and variable names in the given source code."
@@ -403,7 +364,7 @@ def find_names(code:str, st:StackTrace) -> (bool, set):
     return True, names
 
 
-# Internal Cell nr. 190
+# Internal Cell nr. 188
 def make_import_relative(p_from:Path, m_to:str)->str:
     "Convert a module `m_to` to a name relative to `p_from`."
     mods = m_to.split('.')
@@ -416,7 +377,7 @@ def make_import_relative(p_from:Path, m_to:str)->str:
     return '.' * len(splits) + '.'.join(mods)
 
 
-# Internal Cell nr. 194
+# Internal Cell nr. 192
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -430,7 +391,7 @@ re_import = ReLibName(fr"""
     """, re.VERBOSE | re.MULTILINE)
 
 
-# Internal Cell nr. 195
+# Internal Cell nr. 193
 def relativify_imports(origin:Path, code:str)->str:
     "Transform an absolute 'from LIB_NAME import module' into a relative import of 'module' wrt the library."
     def repl(match):
@@ -439,7 +400,7 @@ def relativify_imports(origin:Path, code:str)->str:
     return re_import.re.sub(repl,code)
 
 
-# Internal Cell nr. 202
+# Internal Cell nr. 200
 # https://docs.python.org/3/library/re.html
 letter = 'a-zA-Z'
 identifier = f'[{letter}_][{letter}0-9_]*'
@@ -447,7 +408,7 @@ module = fr'(?:{identifier}\.)*{identifier}'
 module
 
 
-# Internal Cell nr. 203
+# Internal Cell nr. 201
 # https://docs.python.org/3/library/re.html
 re_match_module = re.compile(fr"""
         ^              # start of the string
@@ -456,7 +417,7 @@ re_match_module = re.compile(fr"""
         """, re.VERBOSE)
 
 
-# Internal Cell nr. 205
+# Internal Cell nr. 203
 @Traced
 def module_to_path(m:str, st:StackTrace)->(bool, Path):
     "Turn a module name into a path such that the exported file can be imported from the library "\
@@ -471,7 +432,7 @@ def module_to_path(m:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"'{m}' is not a valid module name.")), None
 
 
-# Internal Cell nr. 213
+# Internal Cell nr. 211
 @Traced
 def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     "Turn a export path argument into a valid path, resolving relative paths and checking for mistakes."
@@ -489,14 +450,14 @@ def make_valid_path(s:str, st:StackTrace)->(bool, Path):
     else: return st.report_error(ValueError(f"Expected '.py' file ending, but got '{p.suffix}'. ('{s}')")), None
 
 
-# Cell nr. 222
+# Cell nr. 220
 class DictLikeAccess():
     __slots__ = []
     def __getitem__(self, key):        return getattr(self, key)
     def __setitem__(self, key, value): return setattr(self, key, value)
 
 
-# Cell nr. 223
+# Cell nr. 221
 class DictLikeRepr():
     __slots__ = []
     def _pretty_repr(self, refs):
@@ -521,7 +482,7 @@ class DictLikeRepr():
         return s + '}'
 
 
-# Cell nr. 224
+# Cell nr. 222
 class NotebookStruct(DictLikeAccess, DictLikeRepr):
     __slots__ = ('FilePath', 'RelativeFilePath', 
                  'NotebookCells', 'NotebookMetadata', 'NotebookVersion',
@@ -538,7 +499,7 @@ class NotebookStruct(DictLikeAccess, DictLikeRepr):
         self.ExportUnits      = list()      # if (ExportUnits  is None) else ExportUnits
 
 
-# Cell nr. 225
+# Cell nr. 223
 class CellInfoStruct(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_nr', 'cell_type', 'Notebook',
                  'original_source_code', 'clean_source_code',
@@ -554,7 +515,7 @@ class CellInfoStruct(DictLikeAccess, DictLikeRepr):
         self.export_units          = list()
 
 
-# Cell nr. 228
+# Cell nr. 226
 # TODO: Rename to CommandStruct
 class CommentStruct(DictLikeAccess, DictLikeRepr):
     __slots__ = ('lineno', 'charno', 'Comment', 'Command', 'ParsingResult', 'IsSet', 'Cell')
@@ -573,7 +534,7 @@ class CommentStruct(DictLikeAccess, DictLikeRepr):
         return self.lineno, self.charno
 
 
-# Cell nr. 229
+# Cell nr. 227
 class ScopeUnitStruct(DictLikeAccess, DictLikeRepr):
     __slots__ = ('target', 'add_dunder_all', 'cell_info')
     def __init__(self, target, add_dunder_all, cell_info):
@@ -582,7 +543,7 @@ class ScopeUnitStruct(DictLikeAccess, DictLikeRepr):
         self.cell_info      = cell_info
 
 
-# Cell nr. 230
+# Cell nr. 228
 class ExportUnitStruct(DictLikeAccess, DictLikeRepr):
     __slots__ = ('cell_info'  , 'source_code'    , # TODO: Add scope and cell_nr for ease of use?
                  'export_to'  , 'export_to_scope',
@@ -596,7 +557,7 @@ class ExportUnitStruct(DictLikeAccess, DictLikeRepr):
         self.names             = names
 
 
-# Cell nr. 231
+# Cell nr. 229
 class MergedFileInfoStruct(DictLikeAccess, DictLikeRepr):
     __slots__ = ('orig', 'code', 'names', 'add_dunder_all')
     def __init__(self):
@@ -606,7 +567,7 @@ class MergedFileInfoStruct(DictLikeAccess, DictLikeRepr):
         self.add_dunder_all = None
 
 
-# Cell nr. 234
+# Cell nr. 232
 def register_command(cmd, args, active=True):
     "Store mapping from command name to args, and command name to reference to the decorated function in globals."
     if not active: return lambda f: f
@@ -617,12 +578,12 @@ def register_command(cmd, args, active=True):
     return _reg
 
 
-# Cell nr. 235
+# Cell nr. 233
 all_commands = {}
 cmd2func     = {}
 
 
-# Cell nr. 237
+# Cell nr. 235
 @register_command(cmd='default_exp', # allow custom scope name that can be referenced in export?
                   args={'to': '', 'to_path': '', 'no_dunder_all': False, 'scoped': False})
 @Traced
@@ -653,7 +614,7 @@ def kw_default_exp(Notebook:NotebookStruct, cell_info:CellInfoStruct, Comment:Co
     return success
 
 
-# Cell nr. 239
+# Cell nr. 237
 @register_command(cmd='export',
                   args={'internal': False, 'to': '', 'to_path':'', 'ignore_scope':False, 'from_string':False})
 @Traced
@@ -691,7 +652,7 @@ def kw_export(Notebook:NotebookStruct, cell_info:CellInfoStruct, Comment:Comment
     return success
 
 
-# Cell nr. 249
+# Cell nr. 247
 def crawl_directory(Directory:Union[Path, Iterable[Path]], Recurse:bool=True) -> Generator:
     "Crawl the `Directory` for a list of .ipynb files."
     # TODO: Handle symlinks?
@@ -712,7 +673,7 @@ def crawl_directory(Directory:Union[Path, Iterable[Path]], Recurse:bool=True) ->
             else: continue
 
 
-# Cell nr. 250
+# Cell nr. 248
 def read_notebook(FilePath:Path) -> NotebookStruct:
     "Read the `FilePath` notebook."
     with open(FilePath,'r', encoding='utf8') as File:
@@ -724,14 +685,14 @@ def read_notebook(FilePath:Path) -> NotebookStruct:
                          )
 
 
-# Cell nr. 251
+# Cell nr. 249
 @prefetch(max_prefetch=0) # NOTE: max_prefetch <= 0 means the queue size is infinite
 def async_load_notebooks(Directory:Path, Recurse:bool=True) -> Iterator[NotebookStruct]:
     "Crawl for notebooks in the `path` directory, and load in a background thread."
     for FilePath in crawl_directory(Directory, Recurse): yield read_notebook(FilePath)
 
 
-# Internal Cell nr. 257
+# Internal Cell nr. 255
 # https://docs.python.org/3/library/re.html
 re_match_heading = re.compile(r"""
         ^              # start of the string
@@ -741,7 +702,7 @@ re_match_heading = re.compile(r"""
         """,re.IGNORECASE | re.VERBOSE | re.DOTALL)
 
 
-# Cell nr. 259
+# Cell nr. 257
 @Traced
 def parse_file(Notebook:NotebookStruct, st:StackTrace) -> bool:
     success = True
@@ -812,7 +773,7 @@ def parse_file(Notebook:NotebookStruct, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 260
+# Cell nr. 258
 @Traced
 def parse_all(Notebooks:Iterator[NotebookStruct], st:StackTrace) -> Tuple[bool, dict]:
     "Loads all .ipynb files in the origin_path directory, and passes them one at a time to parse_file."
@@ -825,7 +786,7 @@ def parse_all(Notebooks:Iterator[NotebookStruct], st:StackTrace) -> Tuple[bool, 
     return Success, ParsedNotebooks
 
 
-# Cell nr. 262
+# Cell nr. 260
 @Traced
 def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     success:bool = True
@@ -930,7 +891,7 @@ def merge_all(parsed_files:dict, st:StackTrace) -> (bool, dict):
     return success, merged_files
 
 
-# Cell nr. 269
+# Cell nr. 267
 @Traced
 def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     success:bool = True
@@ -959,7 +920,7 @@ def write_file(to:Path, state:dict, st:StackTrace) -> bool:
     return success
 
 
-# Cell nr. 270
+# Cell nr. 268
 @Traced
 def write_all(merged_files:dict, st:StackTrace) -> bool:
     "initialize the package, and writes all `merged_file`"
@@ -987,6 +948,50 @@ def write_all(merged_files:dict, st:StackTrace) -> bool:
         write_success = write_file(to=to, state=state, st=st)
         if not write_success: return False
     return success
+
+
+# Internal Cell nr. 270
+def report_successful_export(ParsedNotebooks:List[NotebookStruct], MergedFiles):
+    "Report stats and compressed information about parsed and exported files."
+    ProjectPath = Config().proj_path
+    
+    NrOfNbs  = len(ParsedNotebooks)
+    PluralNb = (NrOfNbs != 1)
+    
+    NrOfPy   = len(MergedFiles)
+    PluralPy = (NrOfPy != 1)    
+    
+    Title = f'{NrOfNbs} notebook{"s"*PluralNb} {"have" if PluralNb else "has"} been parsed, '\
+            f'resulting in {NrOfPy} python file{"s"*PluralPy}.\n\n'
+    
+    # Information about which notebooks export to which python files
+    NbInfo = f'The following {NrOfNbs} notebook{"s"*PluralNb} {"have" if PluralNb else "has"} been parsed:\n'
+    NbInfo += ('-' * (len(NbInfo) - 1))
+    NrOfExportingFiles = 0
+    Notebook:NotebookStruct = None # type hint
+    for Notebook in ParsedNotebooks:
+        NbInfo += f"\n{Notebook.RelativeFilePath} ({len(Notebook.ExportCells)} cells total)\n"
+        Default:ScopeUnitStruct = Notebook.ExportScopes[(0,)]
+        NrOfExportingFiles += ((len(Notebook.ExportScopes) - int(Default is None)) > 0)
+        NbInfo += f'---> Default:\t{None if (Default is None) else relative_path(Default.target, ProjectPath)}'
+        for Scope, ScopeUnit in sorted(Notebook.ExportScopes.items(), key=lambda x: x[0]):
+            if Scope == (0,): continue
+            NbInfo += f"\n---> {Scope}:\t{relative_path(ScopeUnit.target, ProjectPath)}"
+    
+    
+    Middle = f'Of the {NrOfNbs} notebook{"s"*PluralNb} parsed, '\
+             f'{NrOfExportingFiles} {"are" if NrOfExportingFiles!=1 else "is"} outputting code.'
+    
+    # Information about how many Python files have been generated, and the number of cells exported to each
+    PyInfo = f'The following {NrOfPy} python file{"s"*PluralPy} {"have" if PluralPy else "has"} been generated:\n'
+    PyInfo += '-' * (len(PyInfo) - 1) + '\n'
+    for ToPath, State in MergedFiles.items():
+        NrOfCells = len(State['code'])
+        CellInfo  = str(NrOfCells)
+        CellInfo  = f'{" " * (max(0, 4-len(CellInfo)))}{CellInfo}' # whitespace padding
+        PyInfo += f'---> {CellInfo} cell{"s"*(NrOfCells!=1)} output to {relative_path(ToPath, ProjectPath)}\n'
+        
+    print(f'{Title}{NbInfo}\n\n{Middle}\n\n{PyInfo}')
 
 
 # Cell nr. 272
